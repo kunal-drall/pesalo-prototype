@@ -19,14 +19,47 @@ export type PositionInfo = {
   id: string;
   asset: AssetCode;
   type: "fixed" | "flex";
-  amount: string;
-  earned: string;
-  rate: number;
+  amount: number;
+  earned: number;
+  apy: number;
   maturity?: string;
+  market?: string;
+  syContract?: string;
+  splitterContract?: string;
+  daysRemaining?: number;
+  matured?: boolean;
 };
 
 export type PriceInfo = {
-  XLM_USD: number;
+  USDC_USD: number;
   EURC_USD: number;
+  XLM_USD: number;
   updatedAt: string;
+};
+
+export type ActivityEvent = {
+  id: string;
+  txHash: string;
+  kind:
+    | "deposit_fixed"
+    | "deposit_flex"
+    | "withdraw_flex"
+    | "send"
+    | "receive"
+    | "claim"
+    | "redeem_maturity";
+  asset: AssetCode;
+  amount: number;
+  counterparty?: string;
+  occurredAt: string;
+};
+
+export type MarketSnapshot = {
+  address: string;
+  asset: AssetCode;
+  maturity: string;
+  daysRemaining: number;
+  tvlSy: number;
+  impliedRateWad: bigint;
+  impliedApy: number;
 };

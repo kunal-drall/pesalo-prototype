@@ -1,35 +1,38 @@
 import { useEffect, useState } from "react";
 
-import { fetchRates, FixedRate } from "@/lib/api/rates";
+import { fetchRates, FixedRate, FlexRate } from "@/lib/api/rates";
 
 export function useRates() {
-  const [rates, setRates] = useState<FixedRate[]>([]);
+  const [fixed, setFixed] = useState<FixedRate[]>([]);
+  const [flex, setFlex] = useState<FlexRate[]>([]);
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
 
-    fetchRates()
-      .then((payload) => {
-        if (active) {
-          setRates(payload.rates);
-        }
-      })
-      .catch(() => {
-        if (active) {
-          setRates([]);
-        }
-      })
-      .finally(() => {
-        if (active) {
-          setLoading(false);
-        }
-      });
+    async function load() {
+      try {
+        const payload = await fetchRates();
+        if (!active) return;
+        setFixed(payload.rates);
+        setFlex(payload.flexRates);
+        setUpdatedAt(payload.updatedAt);
+        setError(null);
+      } catch (err) {
+        if (!active) return;
+        setError(err instanceof Error ? err.message : "Unable to load rates");
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
 
+    load();
     return () => {
       active = false;
     };
   }, []);
 
-  return { rates, loading };
+  return { fixed, flex, updatedAt, loading, error };
 }

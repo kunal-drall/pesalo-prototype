@@ -4,17 +4,17 @@ import { config } from "../config";
 
 let pool: pg.Pool | null = null;
 
-export function getPool() {
+export function getPool(): pg.Pool {
   if (!pool) {
-    pool = new pg.Pool({
-      connectionString: config.databaseUrl || undefined
-    });
+    pool = new pg.Pool({ connectionString: config.databaseUrl || undefined });
   }
-
   return pool;
 }
 
-export async function query<T>(text: string, values: unknown[] = []) {
+export async function query<T extends pg.QueryResultRow = pg.QueryResultRow>(
+  text: string,
+  values: unknown[] = [],
+): Promise<T[]> {
   const result = await getPool().query<T>(text, values);
   return result.rows;
 }

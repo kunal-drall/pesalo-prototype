@@ -16,6 +16,7 @@
     "@react-native-async-storage/async-storage": "2.2.0",
     "@stellar/stellar-sdk": "latest",
     "expo": "latest",
+    "expo-clipboard": "^55.0.13",
     "expo-haptics": "latest",
     "expo-linear-gradient": "latest",
     "expo-local-authentication": "latest",

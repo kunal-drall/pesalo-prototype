@@ -7,12 +7,13 @@ import { colors, spacing, typography } from "@/lib/utils/theme";
 type AssetPickerProps = {
   value: SupportedAsset;
   onChange: (asset: SupportedAsset) => void;
+  options?: readonly SupportedAsset[];
 };
 
-export function AssetPicker({ value, onChange }: AssetPickerProps) {
+export function AssetPicker({ value, onChange, options = SUPPORTED_ASSETS }: AssetPickerProps) {
   return (
     <View style={styles.wrapper}>
-      {SUPPORTED_ASSETS.map((asset) => {
+      {options.map((asset) => {
         const selected = value === asset;
         return (
           <Pressable
@@ -40,22 +41,15 @@ const styles = StyleSheet.create({
     borderRadius: spacing.radiusFull,
     borderWidth: 1,
     flexDirection: "row",
-    padding: 4
+    padding: 4,
   },
   option: {
     alignItems: "center",
     borderRadius: spacing.radiusFull,
     flex: 1,
-    paddingVertical: 10
+    paddingVertical: 10,
   },
-  selected: {
-    backgroundColor: colors.brand.primaryMuted
-  },
-  text: {
-    ...typography.caption,
-    color: colors.text.tertiary
-  },
-  selectedText: {
-    color: colors.brand.primaryLight
-  }
+  selected: { backgroundColor: colors.brand.primaryMuted },
+  text: { ...typography.caption, color: colors.text.tertiary },
+  selectedText: { color: colors.brand.primaryLight },
 });

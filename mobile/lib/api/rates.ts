@@ -6,8 +6,20 @@ export type FixedRate = {
   apy: number;
   days: number;
   maturity: string;
+  market: string;
 };
 
-export async function fetchRates() {
-  return apiGet<{ rates: FixedRate[] }>("/rates");
+export type FlexRate = {
+  asset: SupportedAsset;
+  apy: number;
+};
+
+export type RatesResponse = {
+  rates: FixedRate[];
+  flexRates: FlexRate[];
+  updatedAt: string;
+};
+
+export async function fetchRates(): Promise<RatesResponse> {
+  return apiGet<RatesResponse>("/rates");
 }

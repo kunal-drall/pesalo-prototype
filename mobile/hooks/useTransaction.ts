@@ -1,9 +1,12 @@
 import * as Haptics from "expo-haptics";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 import { signTransaction } from "@/lib/passkey";
+import { stellarClient } from "@/lib/stellar/client";
+import { submitSponsoredTransaction } from "@/lib/stellar/launchtube";
+import { useWalletStore } from "@/stores/walletStore";
 
-export type TransactionState =
+export type TxStatus =
   | "idle"
   | "building"
   | "signing"
@@ -12,34 +15,71 @@ export type TransactionState =
   | "success"
   | "error";
 
+type RunOptions = {
+  /// Skip the Launchtube hop. Useful when a contract has its own custom
+  /// submission path (none currently, but reserved).
+  skipSubmit?: boolean;
+};
+
+/// Drives the full lifecycle of a Soroban transaction from the UI:
+///   build → sign → submit (Launchtube) → poll → refresh wallet store.
+/// The status state machine lets the caller render an accurate spinner
+/// label ("Face ID…", "Submitting…", "Confirming on chain…").
 export function useTransaction() {
-  const [state, setState] = useState<TransactionState>("idle");
+  const refresh = useWalletStore((s) => s.refresh);
+  const [status, setStatus] = useState<TxStatus>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [txHash, setTxHash] = useState<string | null>(null);
 
-  async function run(build: () => Promise<string>, submit: (signedXdr: string) => Promise<void>) {
-    try {
+  const run = useCallback(
+    async (build: () => Promise<string>, options: RunOptions = {}) => {
+      setStatus("building");
       setError(null);
-      setState("building");
-      const xdr = await build();
-      setState("signing");
-      const signed = await signTransaction(xdr);
-      setState("submitting");
-      await submit(signed);
-      setState("confirming");
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      setState("success");
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (caught) {
-      setState("error");
-      setError(caught instanceof Error ? caught.message : "Something went wrong. Please try again.");
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-    }
-  }
+      setTxHash(null);
 
-  function reset() {
-    setState("idle");
+      try {
+        const unsigned = await build();
+
+        setStatus("signing");
+        const signed = await signTransaction(unsigned);
+
+        if (options.skipSubmit) {
+          setStatus("success");
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          return { hash: null };
+        }
+
+        setStatus("submitting");
+        const receipt = await submitSponsoredTransaction(signed);
+        setTxHash(receipt.hash);
+
+        setStatus("confirming");
+        const polled = await stellarClient.pollTransaction(receipt.hash);
+        if (polled.status === "failed") {
+          throw new Error("Transaction failed on chain");
+        }
+
+        setStatus("success");
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        await refresh();
+        return { hash: receipt.hash };
+      } catch (caught) {
+        const message =
+          caught instanceof Error ? caught.message : "Something went wrong. Please try again.";
+        setStatus("error");
+        setError(message);
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        return { hash: null, error: message };
+      }
+    },
+    [refresh],
+  );
+
+  const reset = useCallback(() => {
+    setStatus("idle");
     setError(null);
-  }
+    setTxHash(null);
+  }, []);
 
-  return { state, error, run, reset };
+  return { status, error, txHash, run, reset };
 }

@@ -1,20 +1,28 @@
-import { PropsWithChildren } from "react";
-import { SafeAreaView, ScrollView, StyleSheet, ViewStyle } from "react-native";
+import { PropsWithChildren, ReactElement } from "react";
+import {
+  RefreshControlProps,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  ViewStyle,
+} from "react-native";
 
 import { colors, spacing } from "@/lib/utils/theme";
 
 type ScreenProps = PropsWithChildren<{
   scroll?: boolean;
   contentStyle?: ViewStyle;
+  refreshControl?: ReactElement<RefreshControlProps>;
 }>;
 
-export function Screen({ children, scroll = false, contentStyle }: ScreenProps) {
+export function Screen({ children, scroll = false, contentStyle, refreshControl }: ScreenProps) {
   if (scroll) {
     return (
       <SafeAreaView style={styles.safe}>
         <ScrollView
           contentContainerStyle={[styles.content, styles.scrollContent, contentStyle]}
           keyboardShouldPersistTaps="handled"
+          refreshControl={refreshControl}
         >
           {children}
         </ScrollView>
@@ -28,13 +36,13 @@ export function Screen({ children, scroll = false, contentStyle }: ScreenProps) 
 const styles = StyleSheet.create({
   safe: {
     backgroundColor: colors.bg.primary,
-    flex: 1
+    flex: 1,
   },
   content: {
     gap: spacing.gapLg,
-    padding: spacing.screenPadding
+    padding: spacing.screenPadding,
   },
   scrollContent: {
-    paddingBottom: 120
-  }
+    paddingBottom: 120,
+  },
 });
