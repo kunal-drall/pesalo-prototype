@@ -1,0 +1,272 @@
+:root {
+  color-scheme: dark;
+  --bg: #080b11;
+  --surface: #0e1219;
+  --surface-elevated: #151b24;
+  --text: #f2f4f7;
+  --muted: #94a3b8;
+  --faint: #64748b;
+  --green: #16a367;
+  --green-light: #1ecc7f;
+  --gold: #f5b731;
+  --border: #1e293b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.page {
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+.nav {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin: 0 auto;
+  max-width: 1120px;
+  padding: 24px;
+}
+
+.brand {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.mark {
+  align-items: center;
+  background: color-mix(in srgb, var(--green) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--green) 45%, transparent);
+  border-radius: 18px;
+  display: flex;
+  height: 36px;
+  justify-content: center;
+  width: 36px;
+}
+
+.leaf {
+  background: var(--green-light);
+  border-radius: 6px 16px 16px 6px;
+  height: 18px;
+  transform: rotate(-35deg);
+  width: 13px;
+}
+
+.nav-link {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.hero {
+  display: grid;
+  gap: 56px;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  margin: 0 auto;
+  max-width: 1120px;
+  min-height: calc(100vh - 86px);
+  padding: 64px 24px 96px;
+}
+
+.hero-copy {
+  align-self: center;
+  max-width: 620px;
+}
+
+h1 {
+  font-size: clamp(56px, 9vw, 108px);
+  letter-spacing: -0.075em;
+  line-height: 0.92;
+  margin: 0;
+}
+
+.subtitle {
+  color: var(--muted);
+  font-size: 21px;
+  line-height: 1.5;
+  margin: 28px 0 0;
+  max-width: 540px;
+}
+
+.actions {
+  align-items: center;
+  display: flex;
+  gap: 14px;
+  margin-top: 40px;
+}
+
+.button {
+  background: linear-gradient(180deg, var(--green), #0d7a4a);
+  border-radius: 18px;
+  color: #080b11;
+  display: inline-flex;
+  font-size: 16px;
+  font-weight: 700;
+  padding: 16px 22px;
+}
+
+.secondary {
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.phone {
+  align-self: center;
+  background:
+    radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--green) 24%, transparent), transparent 34%),
+    linear-gradient(180deg, #151b24, #080b11);
+  border: 1px solid var(--border);
+  border-radius: 42px;
+  box-shadow: 0 32px 90px rgb(0 0 0 / 0.45), 0 0 40px color-mix(in srgb, var(--green) 12%, transparent);
+  height: 720px;
+  padding: 18px;
+  width: 360px;
+}
+
+.screen {
+  background: var(--bg);
+  border: 1px solid #17202b;
+  border-radius: 32px;
+  height: 100%;
+  overflow: hidden;
+  padding: 28px 22px;
+}
+
+.screen-label {
+  color: var(--faint);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.balance {
+  font-size: 42px;
+  font-weight: 750;
+  letter-spacing: -0.06em;
+  line-height: 1;
+  margin-top: 10px;
+}
+
+.gain {
+  color: var(--green-light);
+  font-size: 14px;
+  margin-top: 8px;
+}
+
+.pills {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1fr 1fr;
+  margin-top: 24px;
+}
+
+.pill {
+  background: var(--surface-elevated);
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 14px;
+  padding: 12px;
+  text-align: center;
+}
+
+.asset-row {
+  align-items: center;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 12px;
+  min-height: 72px;
+}
+
+.asset-dot {
+  align-items: center;
+  background: var(--surface-elevated);
+  border-radius: 18px;
+  color: var(--green-light);
+  display: flex;
+  font-weight: 800;
+  height: 36px;
+  justify-content: center;
+  width: 36px;
+}
+
+.asset-copy {
+  flex: 1;
+}
+
+.asset-name,
+.asset-amount {
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.asset-symbol,
+.asset-usd {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 3px;
+}
+
+.asset-amounts {
+  text-align: right;
+}
+
+.savings-card {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--green) 10%, var(--surface)), var(--surface));
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  margin-top: 28px;
+  padding: 18px;
+}
+
+.savings-title {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.savings-money {
+  font-size: 24px;
+  font-weight: 750;
+  margin-top: 8px;
+}
+
+.savings-rate {
+  color: var(--gold);
+  font-size: 14px;
+  margin-top: 8px;
+}
+
+@media (max-width: 860px) {
+  .hero {
+    grid-template-columns: 1fr;
+    padding-top: 36px;
+  }
+
+  .phone {
+    height: 620px;
+    justify-self: center;
+    width: min(360px, 100%);
+  }
+}

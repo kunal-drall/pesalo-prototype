@@ -1,0 +1,40 @@
+{
+  "name": "pesalo-mobile",
+  "version": "0.1.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@expo/vector-icons": "latest",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@stellar/stellar-sdk": "latest",
+    "expo": "latest",
+    "expo-haptics": "latest",
+    "expo-linear-gradient": "latest",
+    "expo-local-authentication": "latest",
+    "expo-router": "latest",
+    "expo-secure-store": "latest",
+    "lottie-react-native": "latest",
+    "nativewind": "^4.0.1",
+    "passkey-kit": "latest",
+    "react": "19.2.0",
+    "react-dom": "^19.2.0",
+    "react-native": "0.83.6",
+    "react-native-passkeys": "latest",
+    "react-native-qrcode-svg": "latest",
+    "zustand": "latest"
+  },
+  "devDependencies": {
+    "@expo/cli": "^55.0.30",
+    "@types/react": "latest",
+    "tailwindcss": "^3.4.0",
+    "typescript": "latest"
+  }
+}
