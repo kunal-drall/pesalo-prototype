@@ -117,19 +117,124 @@ h1 {
   margin-top: 40px;
 }
 
+.secondary-actions {
+  margin-top: 18px;
+}
+
 .button {
   background: linear-gradient(180deg, var(--green), #0d7a4a);
+  border: 0;
   border-radius: 18px;
   color: #080b11;
+  cursor: pointer;
   display: inline-flex;
+  font-family: inherit;
   font-size: 16px;
   font-weight: 700;
   padding: 16px 22px;
+  transition: transform 120ms ease, opacity 120ms ease;
+}
+
+.button:hover {
+  transform: translateY(-1px);
+}
+
+.button:active {
+  transform: translateY(0);
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+  transform: none;
 }
 
 .secondary {
   color: var(--muted);
   font-size: 15px;
+}
+
+.visually-hidden {
+  border: 0;
+  clip: rect(0, 0, 0, 0);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.early-access-form {
+  margin-top: 40px;
+  max-width: 540px;
+}
+
+.early-access-row {
+  align-items: stretch;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  display: flex;
+  gap: 8px;
+  padding: 6px;
+  transition: border-color 160ms ease;
+}
+
+.early-access-row:focus-within {
+  border-color: color-mix(in srgb, var(--green) 65%, transparent);
+}
+
+.early-access-input {
+  background: transparent;
+  border: 0;
+  color: var(--text);
+  flex: 1;
+  font-family: inherit;
+  font-size: 16px;
+  min-width: 0;
+  outline: none;
+  padding: 10px 12px;
+}
+
+.early-access-input::placeholder {
+  color: var(--faint);
+}
+
+.early-access-input:disabled {
+  opacity: 0.6;
+}
+
+.early-access-submit {
+  border-radius: 14px;
+  flex-shrink: 0;
+  padding: 12px 18px;
+}
+
+.early-access-feedback {
+  color: var(--faint);
+  font-size: 13px;
+  margin-top: 10px;
+  min-height: 18px;
+}
+
+.early-access-feedback.is-success {
+  color: var(--green-light);
+}
+
+.early-access-feedback.is-error {
+  color: #ff8082;
+}
+
+@media (max-width: 560px) {
+  .early-access-row {
+    flex-direction: column;
+  }
+
+  .early-access-submit {
+    width: 100%;
+  }
 }
 
 .phone {

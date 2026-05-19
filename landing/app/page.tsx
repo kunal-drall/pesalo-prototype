@@ -1,7 +1,9 @@
+import { EarlyAccessForm } from "./components/early-access-form";
+
 const assets = [
   { name: "USD Coin", symbol: "USDC", amount: "500.00 USDC", usd: "$500.00" },
   { name: "Euro Coin", symbol: "EURC", amount: "250.00 EURC", usd: "$270.00" },
-  { name: "Stellar", symbol: "XLM", amount: "1,000.00 XLM", usd: "$112.50" }
+  { name: "Stellar", symbol: "XLM", amount: "1,000.00 XLM", usd: "$112.50" },
 ];
 
 export default function Home() {
@@ -14,20 +16,19 @@ export default function Home() {
           </span>
           Pesalo
         </a>
-        <a className="nav-link" href="mailto:hello@pesalo.fun">
-          hello@pesalo.fun
+        <a className="nav-link" href="mailto:priya@29projectslab.com">
+          priya@29projectslab.com
         </a>
       </nav>
       <section className="hero">
         <div className="hero-copy">
           <h1>Pesalo</h1>
           <p className="subtitle">
-            A passkey-first savings wallet for USDC, EURC, and XLM. Deposit, earn, send, and receive without seed phrases.
+            A passkey-first savings wallet for USDC, EURC, and XLM. Deposit, earn,
+            send, and receive without seed phrases.
           </p>
-          <div className="actions">
-            <a className="button" href="mailto:hello@pesalo.fun?subject=Pesalo%20early%20access">
-              Request early access
-            </a>
+          <EarlyAccessForm />
+          <div className="actions secondary-actions">
             <a className="secondary" href="/privacy">
               Privacy
             </a>

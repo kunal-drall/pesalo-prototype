@@ -1,3 +1,7 @@
+/// SQL schema. Kept in source rather than read from disk so the compiled
+/// dist/ doesn't depend on the source tree layout. Mirror this in schema.sql
+/// for local psql workflows (`psql -f schema.sql`).
+export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS rates (
   id BIGSERIAL PRIMARY KEY,
   asset TEXT NOT NULL,
@@ -65,3 +69,4 @@ CREATE UNIQUE INDEX IF NOT EXISTS early_access_email_idx
 
 CREATE INDEX IF NOT EXISTS early_access_created_at_idx
   ON early_access (created_at DESC);
+`;
