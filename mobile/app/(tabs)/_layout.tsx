@@ -1,67 +1,71 @@
-import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { Tabs } from "expo-router";
 
-import { colors, typography } from "@/lib/utils/theme";
+import { Icon, IconName } from "@/components/design/Icon";
+import { useTheme } from "@/lib/design/theme";
 
+/// Tab bar mirroring the design canvas — Home / Boost / Discover /
+/// Activity. Send is no longer a tab; it's a quick action accessible
+/// from the Home pill row (matches the auto-earn model where you
+/// rarely send compared to receive + earn).
 export default function TabLayout() {
+  const t = useTheme();
+
+  const renderIcon = (name: IconName) =>
+    function TabIcon({ color, focused }: { color: string; focused: boolean }) {
+      return <Icon name={name} size={22} stroke={focused ? 2.2 : 1.7} color={color} />;
+    };
+
   return (
     <Tabs
       screenListeners={{
-        tabPress: () => Haptics.selectionAsync()
+        tabPress: () => Haptics.selectionAsync(),
       }}
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.brand.primary,
-        tabBarInactiveTintColor: colors.text.tertiary,
+        tabBarActiveTintColor: t.green,
+        tabBarInactiveTintColor: t.fg3,
         tabBarLabelStyle: {
-          ...typography.bodyMd,
-          fontSize: 11
+          fontFamily: t.sans,
+          fontSize: 10,
+          fontWeight: "600",
+          letterSpacing: 0.2,
+          textTransform: "uppercase",
         },
         tabBarStyle: {
-          backgroundColor: colors.bg.secondary,
-          borderTopColor: colors.border.subtle,
-          height: 68,
-          paddingBottom: 10,
-          paddingTop: 8
-        }
+          backgroundColor: t.bg1,
+          borderTopColor: t.border,
+          height: 84,
+          paddingTop: 8,
+          paddingBottom: 24,
+        },
       }}
     >
       <Tabs.Screen
         name="index"
-        options={{
-          title: "Home",
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons color={color} name="home" size={size} />
-          )
-        }}
+        options={{ title: "Home", tabBarIcon: renderIcon("home") }}
       />
       <Tabs.Screen
-        name="savings"
-        options={{
-          title: "Savings",
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons color={color} name="chart-line" size={size} />
-          )
-        }}
+        name="boost"
+        options={{ title: "Boost", tabBarIcon: renderIcon("flame") }}
       />
       <Tabs.Screen
-        name="send"
-        options={{
-          title: "Send",
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons color={color} name="send" size={size} />
-          )
-        }}
+        name="discover"
+        options={{ title: "Discover", tabBarIcon: renderIcon("compass") }}
       />
       <Tabs.Screen
         name="activity"
-        options={{
-          title: "Activity",
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons color={color} name="history" size={size} />
-          )
-        }}
+        options={{ title: "Activity", tabBarIcon: renderIcon("clock") }}
+      />
+      {/* Existing tabs that no longer appear in the bar — keep them as
+          navigable routes (links into them still work) but hide the tab. */}
+      <Tabs.Screen
+        name="savings"
+        options={{ href: null, title: "Savings" }}
+      />
+      <Tabs.Screen
+        name="send"
+        options={{ href: null, title: "Send" }}
       />
     </Tabs>
   );

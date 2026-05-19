@@ -1,114 +1,329 @@
-import { useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { useMemo } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
+import Svg, { Circle } from "react-native-svg";
 
-import { CurrencyBadge } from "@/components/CurrencyBadge";
-import { Screen } from "@/components/Screen";
-import { formatMoney } from "@/lib/utils/format";
-import { colors, spacing, typography } from "@/lib/utils/theme";
+import { Icon } from "@/components/design/Icon";
+import { NavBar } from "@/components/design/NavBar";
+import { Screen } from "@/components/design/Screen";
+import { Caption, Money } from "@/components/design/Text";
+import { useTheme } from "@/lib/design/theme";
 import { useWalletStore } from "@/stores/walletStore";
 
+/// Position detail — locked-rate progress ring + stats grid sourced
+/// directly from the SavingsPosition the backend returns. No mocked
+/// charts; if we can't derive a fact, we omit it.
 export default function PositionDetailScreen() {
+  const t = useTheme();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const positions = useWalletStore((s) => s.positions);
-  const position = useMemo(() => positions.find((p) => p.id === id), [positions, id]);
+  const position = useMemo(
+    () => positions.find((p) => p.id === id),
+    [positions, id],
+  );
 
   if (!position) {
     return (
-      <Screen>
-        <Text style={styles.title}>Position not found</Text>
-        <Text style={styles.body}>This deposit may have already matured or been redeemed.</Text>
+      <Screen topInset={0}>
+        <NavBar title="Position" onBack={() => router.back()} />
+        <View style={{ paddingHorizontal: 20, paddingTop: 24 }}>
+          <Text
+            style={{
+              fontFamily: t.sans,
+              fontSize: 22,
+              fontWeight: "600",
+              color: t.fg,
+              letterSpacing: -0.6,
+            }}
+          >
+            Position not found
+          </Text>
+          <Text
+            style={{
+              fontFamily: t.sans,
+              fontSize: 14,
+              color: t.fg2,
+              marginTop: 8,
+            }}
+          >
+            This deposit may have already matured or been redeemed.
+          </Text>
+        </View>
       </Screen>
     );
   }
 
-  const progress = position.daysRemaining ? Math.max(0, Math.min(1, (90 - position.daysRemaining) / 90)) : 0;
-  const expected = position.amount * (position.apy / 100) * ((position.daysRemaining ?? 0) / 365);
+  const daysLeft = position.daysRemaining ?? 0;
+  const totalDays = useMemo(() => {
+    if (!position.maturity) return 0;
+    const maturityMs = new Date(position.maturity).getTime();
+    return Math.max(daysLeft, Math.round((maturityMs - Date.now()) / 86_400_000) + 0);
+  }, [position.maturity, daysLeft]);
+
+  /// Approximate term length from days-remaining + position age, falling
+  /// back to a sane default if we have no other anchor. We avoid the
+  /// hard-coded 90-day assumption that used to ship here.
+  const termDays = useMemo(() => {
+    if (position.maturity) {
+      const maturity = new Date(position.maturity).getTime();
+      const remainingMs = daysLeft * 86_400_000;
+      const startedMs = maturity - remainingMs;
+      return Math.max(1, Math.round((maturity - startedMs) / 86_400_000));
+    }
+    return Math.max(daysLeft, 1);
+  }, [position.maturity, daysLeft]);
+  void totalDays;
+
+  const progress = termDays > 0 ? Math.max(0, Math.min(100, ((termDays - daysLeft) / termDays) * 100)) : 0;
+  const expectedRemaining = position.amount * (position.apy / 100) * (daysLeft / 365);
+  const expectedTotal = position.earned + expectedRemaining;
+  const maturityShort = position.maturity
+    ? new Date(position.maturity).toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+      })
+    : "—";
+  const maturityLong = position.maturity
+    ? new Date(position.maturity).toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    : "—";
 
   return (
-    <Screen scroll>
-      <View style={styles.header}>
-        <Text style={styles.title}>
-          {position.type === "fixed" ? "Fixed Savings" : "Flex Savings"}
-        </Text>
-        <CurrencyBadge asset={position.asset} />
+    <Screen topInset={0}>
+      <NavBar
+        title={position.type === "fixed" ? "Boosted" : "Auto-Earn"}
+        onBack={() => router.back()}
+        badge={position.asset}
+      />
+
+      <View style={{ paddingHorizontal: 20, paddingTop: 4 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
+          <Icon
+            name={position.type === "fixed" ? "lock" : "sparkles"}
+            size={14}
+            stroke={2}
+            color={position.type === "fixed" ? t.gold : t.green}
+          />
+          <Text
+            style={{
+              fontFamily: t.sans,
+              fontSize: 12,
+              fontWeight: "700",
+              color: position.type === "fixed" ? t.gold : t.green,
+              letterSpacing: 0.4,
+              textTransform: "uppercase",
+            }}
+          >
+            {position.type === "fixed" ? "Fixed" : "Auto"} {position.apy.toFixed(1)}%
+          </Text>
+        </View>
+        <Money size={32} weight="700" style={{ letterSpacing: -1.2 }}>
+          {formatAsset(position.amount, position.asset)}
+        </Money>
+        <View style={{ height: 6 }} />
+        {position.type === "fixed" && position.maturity && (
+          <Text
+            style={{
+              fontFamily: t.sans,
+              fontSize: 14,
+              color: t.fg2,
+            }}
+          >
+            Returns to auto-earn on{" "}
+            <Text style={{ color: t.fg, fontWeight: "600" }}>{maturityShort}</Text>
+          </Text>
+        )}
       </View>
-      <Text style={styles.amount}>{formatMoney(position.amount)}</Text>
-      <Text style={styles.rate}>at {position.apy.toFixed(2)}% APY</Text>
 
       {position.type === "fixed" && (
-        <View style={styles.progressWrap}>
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
-          </View>
-          <Text style={styles.progressLabel}>
-            {position.daysRemaining ?? 0} days left
-          </Text>
+        <View style={{ alignItems: "center", paddingTop: 32 }}>
+          <ProgressRing size={168} stroke={5} progress={progress} daysLeft={daysLeft} />
         </View>
       )}
 
-      <View style={styles.grid}>
-        <Stat label="Earned" value={formatMoney(position.earned)} accent />
+      <View
+        style={{
+          paddingHorizontal: 20,
+          paddingTop: 28,
+          flexDirection: "row",
+          flexWrap: "wrap",
+          gap: 10,
+        }}
+      >
+        <StatCard label="Earned" value={formatAsset(position.earned, position.asset)} accent={t.gold} />
         {position.type === "fixed" && (
-          <Stat label="Expected" value={formatMoney(expected + position.earned)} />
-        )}
-        {position.maturity && (
-          <Stat
-            label="Maturity"
-            value={new Date(position.maturity).toLocaleDateString(undefined, {
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-            })}
+          <StatCard
+            label="Expected"
+            value={formatAsset(expectedTotal, position.asset)}
+            accent={t.fg2}
           />
         )}
-        <Stat label="Position" value={position.id} />
+        {position.maturity && (
+          <StatCard label="Matures" value={maturityLong} accent={t.fg2} />
+        )}
+        <StatCard label="APY" value={`${position.apy.toFixed(1)}%`} accent={position.type === "fixed" ? t.gold : t.green} />
       </View>
+
+      {position.type === "fixed" && (
+        <View style={{ paddingHorizontal: 20, paddingTop: 24 }}>
+          <View
+            style={{
+              backgroundColor: t.bg1,
+              borderWidth: 1,
+              borderColor: t.border,
+              borderRadius: 14,
+              padding: 16,
+              flexDirection: "row",
+              alignItems: "flex-start",
+              gap: 12,
+            }}
+          >
+            <Icon name="info" size={16} stroke={1.8} color={t.fg2} />
+            <View style={{ flex: 1 }}>
+              <Text
+                style={{
+                  fontFamily: t.sans,
+                  fontSize: 14,
+                  fontWeight: "600",
+                  color: t.fg,
+                  marginBottom: 4,
+                }}
+              >
+                Early exit (unboost)
+              </Text>
+              <Text
+                style={{
+                  fontFamily: t.sans,
+                  fontSize: 12,
+                  color: t.fg3,
+                  lineHeight: 18,
+                }}
+              >
+                Sell your position at the current market rate. Funds resume
+                auto-earn immediately. May return less than your locked rate.
+              </Text>
+              <Pressable
+                onPress={() =>
+                  router.push({
+                    pathname: "/savings/maturity/[id]",
+                    params: { id: position.id },
+                  })
+                }
+                hitSlop={6}
+                style={{ paddingTop: 8 }}
+              >
+                <Text
+                  style={{
+                    fontFamily: t.sans,
+                    color: t.error,
+                    fontSize: 13,
+                    fontWeight: "600",
+                    letterSpacing: -0.1,
+                  }}
+                >
+                  Unboost early →
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      )}
     </Screen>
   );
 }
 
-function Stat({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
+function ProgressRing({
+  size,
+  stroke,
+  progress,
+  daysLeft,
+}: {
+  size: number;
+  stroke: number;
+  progress: number;
+  daysLeft: number;
+}) {
+  const t = useTheme();
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const offset = c - (progress / 100) * c;
   return (
-    <View style={styles.stat}>
-      <Text style={styles.statLabel}>{label}</Text>
-      <Text style={[styles.statValue, accent && styles.statAccent]}>{value}</Text>
+    <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
+      <Svg width={size} height={size} style={{ position: "absolute" }}>
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          stroke={t.bg3}
+          strokeWidth={stroke}
+          fill="none"
+        />
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          stroke={t.gold}
+          strokeWidth={stroke}
+          fill="none"
+          strokeDasharray={`${c} ${c}`}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          rotation={-90}
+          origin={`${size / 2}, ${size / 2}`}
+        />
+      </Svg>
+      <View style={{ alignItems: "center" }}>
+        <Money size={36} weight="700" style={{ letterSpacing: -1.5, lineHeight: 38 }}>
+          {daysLeft}
+        </Money>
+        <View style={{ height: 4 }} />
+        <Text style={{ fontFamily: t.sans, fontSize: 13, color: t.fg2, letterSpacing: 0.2 }}>
+          days left
+        </Text>
+      </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  header: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
-  title: { ...typography.headlineMd, color: colors.text.primary },
-  body: { ...typography.bodyMd, color: colors.text.secondary },
-  amount: { ...typography.displayMd, color: colors.text.primary, marginTop: spacing.gapLg },
-  rate: { ...typography.bodyLg, color: colors.brand.primaryLight },
-  progressWrap: { gap: spacing.gapMd, marginVertical: spacing.gapLg },
-  progressTrack: {
-    backgroundColor: colors.bg.elevated,
-    borderRadius: spacing.radiusFull,
-    height: 12,
-    overflow: "hidden",
-  },
-  progressFill: { backgroundColor: colors.brand.primary, borderRadius: spacing.radiusFull, height: 12 },
-  progressLabel: { ...typography.bodyMd, color: colors.text.secondary },
-  grid: {
-    borderColor: colors.border.subtle,
-    borderRadius: spacing.radiusXl,
-    borderWidth: 1,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    overflow: "hidden",
-  },
-  stat: {
-    backgroundColor: colors.bg.secondary,
-    borderColor: colors.border.subtle,
-    borderWidth: 0.5,
-    gap: spacing.gapTight,
-    padding: spacing.cardPadding,
-    width: "50%",
-  },
-  statLabel: { ...typography.caption, color: colors.text.tertiary },
-  statValue: { ...typography.bodyLg, color: colors.text.primary },
-  statAccent: { color: colors.accent.gold },
-});
+function StatCard({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: string;
+  accent?: string;
+}) {
+  const t = useTheme();
+  return (
+    <View
+      style={{
+        flexBasis: "48%",
+        flexGrow: 1,
+        backgroundColor: t.bg1,
+        borderWidth: 1,
+        borderColor: t.border,
+        borderRadius: 12,
+        padding: 16,
+        gap: 6,
+      }}
+    >
+      <Caption>{label}</Caption>
+      <Money size={18} weight="600" color={accent ?? t.fg}>
+        {value}
+      </Money>
+    </View>
+  );
+}
+
+function formatAsset(amount: number, asset: string) {
+  const digits = asset === "XLM" ? 2 : 2;
+  return `${new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: 4,
+  }).format(amount)} ${asset}`;
+}

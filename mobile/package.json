@@ -31,6 +31,8 @@
     "react-native": "0.83.6",
     "react-native-passkeys": "latest",
     "react-native-qrcode-svg": "latest",
+    "react-native-svg": "^15.15.5",
+    "react-native-webview": "^13.16.1",
     "zustand": "latest"
   },
   "devDependencies": {
