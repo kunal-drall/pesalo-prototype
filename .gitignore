@@ -27,6 +27,9 @@ Cargo.lock
 contracts/.deployed.json
 contracts/.deployed.env
 contracts/.deployer.env
+contracts/.assets.env
+contracts/.passkey.env
+.cache/
 *.wasm
 *.snap
 *.tsbuildinfo
