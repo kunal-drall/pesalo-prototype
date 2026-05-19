@@ -9,12 +9,13 @@ const EVENT_CACHE_PREFIX = "activity:";
 const MAX_EVENTS_PER_ADDRESS = 50;
 
 // Map our protocol's emitted topic symbols to user-facing activity kinds.
+// Keys mirror the symbol_short!(...) literals in the Soroban contracts.
 const TOPIC_TO_KIND: Record<string, ActivityEvent["kind"]> = {
-  dep_fixed: "deposit_fixed",
-  dep_flex: "deposit_flex",
-  wd_flex: "withdraw_flex",
-  mature: "redeem_maturity",
-  claim: "claim",
+  auto_dep: "auto_deposit",
+  auto_wd: "auto_withdraw",
+  boost: "boost",
+  unboost: "unboost",
+  redeem_b: "redeem_boost",
   transfer: "send",
 };
 

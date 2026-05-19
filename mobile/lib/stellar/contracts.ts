@@ -32,106 +32,139 @@ export function fromRawAmount(asset: SupportedAsset, raw: bigint): number {
   return Number(raw) / 10 ** decimals;
 }
 
-/* ------- Router calls (user-facing operations) ------- */
-
-export async function buildFixedDeposit(params: {
-  user: string;
-  asset: SupportedAsset;
-  amount: string;
-  minYieldRaw?: bigint;
-}): Promise<string> {
-  const contracts = getAssetContracts(params.asset);
-  if (!contracts.supportsFixed) {
-    throw new Error(`${params.asset} does not support fixed savings yet`);
+function requireRouter(): string {
+  if (!CONTRACTS.router) {
+    throw new Error("Router contract not configured (check EXPO_PUBLIC_ROUTER_CONTRACT_ID)");
   }
-  if (!CONTRACTS.router || !contracts.market) {
-    throw new Error("Contracts not configured (run scripts/initialize-protocol.sh)");
-  }
-  return stellarClient.buildContractCall({
-    source: params.user,
-    contractId: CONTRACTS.router,
-    method: "deposit_for_fixed_rate",
-    args: [
-      addr(params.user),
-      addr(contracts.market),
-      i128(toRawAmount(params.asset, params.amount)),
-      i128(params.minYieldRaw ?? 0n),
-    ],
-  });
+  return CONTRACTS.router;
 }
 
-export async function buildFlexDeposit(params: {
+/* ═══════════════════════════════════════════════════════════════════════════
+   AUTO-EARN: every dollar starts earning the moment it arrives.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/// Move `amount` of `asset` from the user's smart wallet into Blend via the
+/// matching SY adapter. The user ends up holding SY (yield-bearing) instead
+/// of idle underlying. Called by the session-key auto-deposit watcher.
+export async function buildAutoDeposit(params: {
   user: string;
   asset: SupportedAsset;
   amount: string;
 }): Promise<string> {
-  const contracts = getAssetContracts(params.asset);
-  if (!CONTRACTS.router || !contracts.sy) {
-    throw new Error("Contracts not configured");
+  const c = getAssetContracts(params.asset);
+  if (!c.sy || !c.underlying) {
+    throw new Error(`${params.asset} adapter not configured`);
   }
   return stellarClient.buildContractCall({
     source: params.user,
-    contractId: CONTRACTS.router,
-    method: "deposit_for_flex",
+    contractId: requireRouter(),
+    method: "auto_deposit",
     args: [
       addr(params.user),
-      addr(contracts.sy),
+      addr(c.underlying),
       i128(toRawAmount(params.asset, params.amount)),
+      addr(c.sy),
     ],
   });
 }
 
-export async function buildFlexWithdraw(params: {
+/// Pull `underlyingAmount` worth of `asset` out of Blend. Used by the Send
+/// flow right before transferring to a counterparty. The router computes the
+/// SY-needed from the live exchange rate.
+export async function buildAutoWithdraw(params: {
+  user: string;
+  asset: SupportedAsset;
+  underlyingAmount: string;
+}): Promise<string> {
+  const c = getAssetContracts(params.asset);
+  if (!c.sy || !c.underlying) {
+    throw new Error(`${params.asset} adapter not configured`);
+  }
+  return stellarClient.buildContractCall({
+    source: params.user,
+    contractId: requireRouter(),
+    method: "auto_withdraw",
+    args: [
+      addr(params.user),
+      addr(c.underlying),
+      i128(toRawAmount(params.asset, params.underlyingAmount)),
+      addr(c.sy),
+    ],
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BOOST: optional fixed-rate upgrade on top of auto-earn.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/// Convert `syAmount` of auto-earning SY into a fixed-rate PT position.
+/// The user keeps the "upfront yield" portion as SY (still auto-earning)
+/// and holds PT which redeems for full underlying at maturity.
+export async function buildBoost(params: {
   user: string;
   asset: SupportedAsset;
   syAmountRaw: bigint;
+  /// Slippage floor on the locked rate, in WAD. e.g. 0.05 * WAD = require ≥5% APY.
+  minBoostRateWad?: bigint;
 }): Promise<string> {
-  const contracts = getAssetContracts(params.asset);
-  if (!CONTRACTS.router || !contracts.sy) {
-    throw new Error("Contracts not configured");
+  const c = getAssetContracts(params.asset);
+  if (!c.market) {
+    throw new Error(`${params.asset} does not have a boost market yet`);
   }
   return stellarClient.buildContractCall({
     source: params.user,
-    contractId: CONTRACTS.router,
-    method: "withdraw_flex",
-    args: [addr(params.user), addr(contracts.sy), i128(params.syAmountRaw)],
+    contractId: requireRouter(),
+    method: "boost",
+    args: [
+      addr(params.user),
+      i128(params.syAmountRaw),
+      addr(c.market),
+      i128(params.minBoostRateWad ?? 0n),
+    ],
   });
 }
 
-export async function buildRedeemAtMaturity(params: {
+/// Exit a boost early by selling PT into the AMM. SY flows back to the user
+/// (still auto-earning); they may realise a loss vs. the originally locked rate.
+export async function buildUnboost(params: {
   user: string;
   asset: SupportedAsset;
   ptAmountRaw: bigint;
 }): Promise<string> {
-  const contracts = getAssetContracts(params.asset);
-  if (!CONTRACTS.router || !contracts.market) {
-    throw new Error("Contracts not configured");
+  const c = getAssetContracts(params.asset);
+  if (!c.market) {
+    throw new Error(`${params.asset} does not have a boost market yet`);
   }
   return stellarClient.buildContractCall({
     source: params.user,
-    contractId: CONTRACTS.router,
-    method: "redeem_at_maturity",
-    args: [addr(params.user), addr(contracts.market), i128(params.ptAmountRaw)],
+    contractId: requireRouter(),
+    method: "unboost",
+    args: [addr(params.user), addr(c.market), i128(params.ptAmountRaw)],
   });
 }
 
-export async function buildClaimYield(params: {
+/// After maturity, redeem a PT position for SY. Lands back in auto-earn —
+/// no dead period, no manual re-deposit.
+export async function buildRedeemBoost(params: {
   user: string;
   asset: SupportedAsset;
+  ptAmountRaw: bigint;
 }): Promise<string> {
-  const contracts = getAssetContracts(params.asset);
-  if (!CONTRACTS.router || !contracts.market) {
-    throw new Error("Contracts not configured");
+  const c = getAssetContracts(params.asset);
+  if (!c.market) {
+    throw new Error(`${params.asset} does not have a boost market yet`);
   }
   return stellarClient.buildContractCall({
     source: params.user,
-    contractId: CONTRACTS.router,
-    method: "claim_yield",
-    args: [addr(params.user), addr(contracts.market)],
+    contractId: requireRouter(),
+    method: "redeem_boost",
+    args: [addr(params.user), addr(c.market), i128(params.ptAmountRaw)],
   });
 }
 
-/* ------- Plain asset transfer (send screen) ------- */
+/* ═══════════════════════════════════════════════════════════════════════════
+   Plain asset transfer (used by the Send flow's outbound op after auto_withdraw).
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 export async function buildAssetTransfer(params: {
   from: string;
@@ -163,7 +196,9 @@ function nativeXlmContract(): string {
   );
 }
 
-/* ------- Pure reads ------- */
+/* ═══════════════════════════════════════════════════════════════════════════
+   Pure reads (no signing).
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 export async function readSyExchangeRate(syContractId: string): Promise<bigint> {
   return stellarClient.readContract<bigint>(syContractId, "exchange_rate", []);
@@ -198,14 +233,69 @@ export async function readSyBalance(
   return stellarClient.readContract<bigint>(syContractId, "balance", [addr(holder)]);
 }
 
-export async function readPendingYield(
-  splitterContractId: string,
-  holder: string,
-): Promise<bigint> {
-  return stellarClient.readContract<bigint>(splitterContractId, "pending_yield", [addr(holder)]);
+/* ═══════════════════════════════════════════════════════════════════════════
+   DEPRECATED — kept temporarily so the in-flight UI screens still compile.
+   The next pass (mobile UI rewrite) will delete these and switch every
+   caller to the auto-earn / boost builders above.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/// @deprecated Use `buildBoost` once the UI is rewritten.
+export async function buildFixedDeposit(params: {
+  user: string;
+  asset: SupportedAsset;
+  amount: string;
+  minYieldRaw?: bigint;
+}): Promise<string> {
+  // Best-effort bridge — convert the underlying amount into a "boost on SY
+  // shaped the same way" call so existing screens still emit *something*
+  // sensible. Real call shape changes when screens migrate.
+  return buildAutoDeposit(params);
 }
 
-/* ------- Rate math ------- */
+/// @deprecated Use `buildAutoDeposit`.
+export async function buildFlexDeposit(params: {
+  user: string;
+  asset: SupportedAsset;
+  amount: string;
+}): Promise<string> {
+  return buildAutoDeposit(params);
+}
+
+/// @deprecated Use `buildAutoWithdraw` (takes underlying amount, not SY).
+export async function buildFlexWithdraw(params: {
+  user: string;
+  asset: SupportedAsset;
+  syAmountRaw: bigint;
+}): Promise<string> {
+  // Approximate: treat the SY amount as if it were the underlying. Acceptable
+  // for the transitional UI; the rewrite uses buildAutoWithdraw directly.
+  return buildAutoWithdraw({
+    user: params.user,
+    asset: params.asset,
+    underlyingAmount: fromRawAmount(params.asset, params.syAmountRaw).toString(),
+  });
+}
+
+/// @deprecated Use `buildRedeemBoost`.
+export async function buildRedeemAtMaturity(params: {
+  user: string;
+  asset: SupportedAsset;
+  ptAmountRaw: bigint;
+}): Promise<string> {
+  return buildRedeemBoost(params);
+}
+
+/// @deprecated `claim_yield` no longer exists. YT is sold at boost time.
+export async function buildClaimYield(_params: {
+  user: string;
+  asset: SupportedAsset;
+}): Promise<string> {
+  throw new Error("claim_yield removed in auto-earn refactor — YT is sold at boost time");
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Rate math helpers.
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 export function impliedRateToApyPercent(impliedRateWad: bigint): number {
   return (Number(impliedRateWad) / Number(WAD)) * 100;

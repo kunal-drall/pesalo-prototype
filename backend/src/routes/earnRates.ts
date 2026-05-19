@@ -2,9 +2,9 @@ import { Router } from "express";
 
 import { rateService } from "../services/rateService";
 
-export const ratesRouter = Router();
+export const earnRatesRouter = Router();
 
-ratesRouter.get("/", async (_req, res, next) => {
+earnRatesRouter.get("/", async (_req, res, next) => {
   try {
     res.json(await rateService.getRates());
   } catch (error) {

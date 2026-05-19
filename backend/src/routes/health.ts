@@ -13,7 +13,7 @@ healthRouter.get("/", async (_req, res) => {
   if (markets.length > 0) {
     try {
       const rates = await rateService.getRates();
-      contractsHealthy = rates.rates.length === markets.length;
+      contractsHealthy = rates.boost.length === markets.length;
       lastRateUpdate = rates.updatedAt;
     } catch {
       contractsHealthy = false;

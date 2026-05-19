@@ -4,12 +4,12 @@ import express, { Request, Response } from "express";
 import { attachExpressIntegration, initSentry } from "./observability/sentry";
 import { activityRouter } from "./routes/activity";
 import { earlyAccessRouter } from "./routes/earlyAccess";
+import { earnRatesRouter } from "./routes/earnRates";
 import { feedbackRouter } from "./routes/feedback";
 import { healthRouter } from "./routes/health";
 import { marketsRouter } from "./routes/markets";
 import { positionsRouter } from "./routes/positions";
 import { pricesRouter } from "./routes/prices";
-import { ratesRouter } from "./routes/rates";
 
 // Sentry must be initialised before any HTTP handler is registered so its
 // integrations can wrap inbound requests.
@@ -37,7 +37,9 @@ export function createApp() {
   );
   app.use(express.json({ limit: "64kb" }));
 
-  app.use("/v1/rates", ratesRouter);
+  app.use("/v1/earn-rates", earnRatesRouter);
+  // Backwards-compat alias for older mobile builds until they update.
+  app.use("/v1/rates", earnRatesRouter);
   app.use("/v1/positions", positionsRouter);
   app.use("/v1/markets", marketsRouter);
   app.use("/v1/prices", pricesRouter);

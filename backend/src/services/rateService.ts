@@ -1,57 +1,59 @@
-import { configuredFixedMarkets, config } from "../config";
-import { FlexRateInfo, MarketSnapshot, RateInfo } from "../types";
+import { config, configuredFixedMarkets } from "../config";
+import { AssetCode, AutoEarnRate, BoostRate, MarketSnapshot } from "../types";
 import { getCached, setCached } from "./cache";
 import { readContract } from "./sorobanReader";
 
 const WAD = 10n ** 18n;
-const RATES_CACHE_KEY = "rates:v1";
-const FLEX_DEFAULT_APY: Record<"USDC" | "EURC" | "XLM", number> = {
+const RATES_CACHE_KEY = "earn-rates:v1";
+
+/// Floor APYs surfaced for auto-earn until the Blend pool integration is live
+/// and we can compute APY from b_rate exchange-rate growth. We deliberately
+/// keep these at 0 rather than fabricate a number — the UI displays "0% APY"
+/// for now, which honestly reflects what the SY adapter is paying out in
+/// passive mode.
+const AUTO_EARN_FLOOR: Record<AssetCode, number> = {
   USDC: 0,
   EURC: 0,
   XLM: 0,
 };
 
-type RatesPayload = {
-  rates: RateInfo[];
-  flexRates: FlexRateInfo[];
+type EarnRatesPayload = {
+  autoEarn: AutoEarnRate[];
+  boost: BoostRate[];
   updatedAt: string;
 };
 
 export const rateService = {
-  /// Returns whatever the in-memory cache holds without trying to refresh.
-  /// The cron job in jobs/ratePoller.ts is responsible for keeping it warm.
-  async getRates(): Promise<RatesPayload> {
-    const cached = getCached<RatesPayload>(RATES_CACHE_KEY);
+  async getRates(): Promise<EarnRatesPayload> {
+    const cached = getCached<EarnRatesPayload>(RATES_CACHE_KEY);
     if (cached) return cached;
-    return refreshRates();
+    return refresh();
   },
 
   async getMarkets(): Promise<MarketSnapshot[]> {
-    const { rates } = await rateService.getRates();
-    return rates.map((rate) => ({
-      address: rate.market,
-      asset: rate.asset,
-      maturity: rate.maturity,
-      daysRemaining: rate.days,
+    const { boost } = await rateService.getRates();
+    return boost.map((row) => ({
+      address: row.market,
+      asset: row.asset,
+      maturity: row.maturity,
+      daysRemaining: row.daysToExpiry,
       tvlSy: 0,
-      // Serialise as decimal string so Express's JSON.stringify doesn't choke
-      // on BigInt (TC39 still hasn't finalised native JSON support).
       impliedRateWad: BigInt(
-        Math.round((rate.fixedAPY * Number(WAD)) / 100),
+        Math.round((row.boostAPY * Number(WAD)) / 100),
       ).toString(),
-      impliedApy: rate.fixedAPY,
+      impliedApy: row.boostAPY,
     }));
   },
 
-  refresh: refreshRates,
+  refresh,
 };
 
-async function refreshRates(): Promise<RatesPayload> {
+async function refresh(): Promise<EarnRatesPayload> {
   const now = new Date().toISOString();
   const markets = configuredFixedMarkets();
 
-  const fixed = await Promise.all(
-    markets.map(async (m): Promise<RateInfo | null> => {
+  const boost = await Promise.all(
+    markets.map(async (m): Promise<BoostRate | null> => {
       try {
         const [impliedRateWad, state] = await Promise.all([
           readContract<bigint>(m.market, "implied_rate", []),
@@ -62,51 +64,59 @@ async function refreshRates(): Promise<RatesPayload> {
         ]);
         const maturityUnix = Number(state.maturity);
         const createdAtUnix = Number(state.created_at);
-        const periodDays = Math.max(1, Math.round((maturityUnix - createdAtUnix) / 86_400));
-        const daysRemaining = Math.max(
+        const periodDays = Math.max(
+          1,
+          Math.round((maturityUnix - createdAtUnix) / 86_400),
+        );
+        const daysToExpiry = Math.max(
           0,
           Math.ceil((maturityUnix - Math.floor(Date.now() / 1000)) / 86_400),
         );
-        // implied_rate is the constant *period* rate the curve fits to. Annualize
-        // for display:  APY = implied_rate × 365 / period_days.
+        // implied_rate is the *period* rate the curve fits to; annualise
+        // for display as APY = (period_rate × 365 / period_days) × 100.
         const periodRate = Number(impliedRateWad) / Number(WAD);
-        const fixedAPY = (periodRate * 365) / periodDays * 100;
+        const boostAPY = (periodRate * 365 * 100) / periodDays;
+        const autoEarnAPY = AUTO_EARN_FLOOR[m.asset];
         return {
           asset: m.asset,
-          maturity: new Date(maturityUnix * 1000).toISOString(),
-          fixedAPY,
-          days: daysRemaining,
+          boostAPY,
+          autoEarnAPY,
+          rateDelta: boostAPY - autoEarnAPY,
           market: m.market,
+          maturity: new Date(maturityUnix * 1000).toISOString(),
+          daysToExpiry,
           updatedAt: now,
         };
       } catch (err) {
-        console.error(`[rateService] ${m.asset} market read failed:`, err);
+        console.error(`[rateService] boost ${m.asset} read failed:`, err);
         return null;
       }
     }),
   );
 
-  const validFixed = fixed.filter((r): r is RateInfo => r !== null);
-  const flexRates = await collectFlexRates(now);
+  const autoEarn: AutoEarnRate[] = (Object.keys(AUTO_EARN_FLOOR) as AssetCode[])
+    .map((asset) => ({
+      asset,
+      apy: AUTO_EARN_FLOOR[asset],
+      source: "Blend" as const,
+      updatedAt: now,
+    }))
+    .filter((row) => {
+      switch (row.asset) {
+        case "USDC":
+          return Boolean(config.contracts.usdcSy);
+        case "EURC":
+          return Boolean(config.contracts.eurcSy);
+        case "XLM":
+          return Boolean(config.contracts.xlmSy);
+      }
+    });
 
-  const payload: RatesPayload = {
-    rates: validFixed,
-    flexRates,
+  const payload: EarnRatesPayload = {
+    autoEarn,
+    boost: boost.filter((b): b is BoostRate => b !== null),
     updatedAt: now,
   };
   setCached(RATES_CACHE_KEY, payload, config.cacheTtlMs);
   return payload;
-}
-
-async function collectFlexRates(updatedAt: string): Promise<FlexRateInfo[]> {
-  // Flex APY is read from Blend pool state. Until the Blend integration is
-  // wired we return whatever the configured floor is — never a fake number.
-  // A non-zero APY appears here only after a real Blend pool read populates it.
-  return (Object.keys(FLEX_DEFAULT_APY) as Array<keyof typeof FLEX_DEFAULT_APY>)
-    .filter((asset) => FLEX_DEFAULT_APY[asset] > 0)
-    .map((asset) => ({ asset, apy: FLEX_DEFAULT_APY[asset], updatedAt }));
-}
-
-function wadToPercent(wad: bigint): number {
-  return (Number(wad) / Number(WAD)) * 100;
 }
