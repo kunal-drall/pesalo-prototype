@@ -12,6 +12,11 @@
 
 set -euo pipefail
 
+# Use rustup-managed toolchain consistently with deploy-contracts.sh.
+if [[ -d "$HOME/.cargo/bin" ]]; then
+  export PATH="$HOME/.cargo/bin:$PATH"
+fi
+
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEPLOYED_FILE="$ROOT_DIR/contracts/.deployed.json"
 DEPLOYER_ENV="$ROOT_DIR/contracts/.deployer.env"
@@ -55,11 +60,24 @@ EURC_ASSET=$(jq -r '.contracts.eurcAsset' "$DEPLOYED_FILE")
 XLM_ASSET=$(jq -r '.contracts.xlmAsset' "$DEPLOYED_FILE")
 
 invoke() {
-  stellar contract invoke \
-    --id "$1" \
+  # Tolerate AlreadyInitialized (#1) and the typical "minter already set"
+  # noise so the script is safe to re-run after a transient failure.
+  local id="$1"
+  shift
+  local output
+  if output=$(stellar contract invoke \
+    --id "$id" \
     --source-account "$SOURCE_ACCOUNT" \
     --network "$NETWORK" \
-    -- "${@:2}"
+    -- "$@" 2>&1); then
+    return 0
+  fi
+  if echo "$output" | grep -qE "AlreadyInitialized|Error\(Contract, #1\)"; then
+    echo "[init] (skip — already initialized: $id $*)" >&2
+    return 0
+  fi
+  echo "$output" >&2
+  return 1
 }
 
 # 1. Initialize SY adapters.

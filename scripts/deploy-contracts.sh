@@ -11,15 +11,27 @@
 
 set -euo pipefail
 
+# Force rustup-managed toolchain (which has the wasm32-unknown-unknown std
+# libraries). Homebrew's rust ships a rustc without those libraries pre-
+# installed and the build silently picks it up if it appears first in PATH.
+if [[ -d "$HOME/.cargo/bin" ]]; then
+  export PATH="$HOME/.cargo/bin:$PATH"
+fi
+
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONTRACTS_DIR="$ROOT_DIR/contracts"
 DEPLOYED_FILE="$CONTRACTS_DIR/.deployed.json"
 DEPLOYER_ENV="$CONTRACTS_DIR/.deployer.env"
+ASSETS_ENV="$CONTRACTS_DIR/.assets.env"
 
-# Auto-source deployer env produced by create-deployer-wallet.sh.
+# Auto-source deployer + test asset envs.
 if [[ -f "$DEPLOYER_ENV" ]]; then
   # shellcheck disable=SC1090
   source "$DEPLOYER_ENV"
+fi
+if [[ -f "$ASSETS_ENV" ]]; then
+  # shellcheck disable=SC1090
+  source "$ASSETS_ENV"
 fi
 
 NETWORK="${SOROBAN_NETWORK:-testnet}"
@@ -35,29 +47,33 @@ for tool in stellar jq cargo rustup; do
 done
 
 cd "$CONTRACTS_DIR"
-rustup target add wasm32-unknown-unknown >/dev/null
-cargo build --release --target wasm32-unknown-unknown
+# Soroban requires the wasm32v1-none target (no reference-types extension).
+rustup target add wasm32v1-none >/dev/null 2>&1 || true
+stellar contract build --profile release
 
-declare -a CRATES=(blend-sy-adapter splitter yield-market router)
-declare -A WASM_HASH
-declare -A CONTRACT_ID
-
-# Install (upload) every WASM first so they can be redeployed without
-# re-uploading. The hash is content-addressed so re-running is idempotent.
-for crate in "${CRATES[@]}"; do
+upload_crate() {
+  local crate="$1"
+  local wasm_name
   wasm_name="$(echo "$crate" | tr '-' '_')"
-  wasm_path="$CONTRACTS_DIR/target/wasm32-unknown-unknown/release/${wasm_name}.wasm"
+  local wasm_path="$CONTRACTS_DIR/target/wasm32v1-none/release/${wasm_name}.wasm"
   if [[ ! -f "$wasm_path" ]]; then
     echo "WASM not found for $crate at $wasm_path" >&2
     exit 1
   fi
+  local hash
   hash=$(stellar contract upload \
     --wasm "$wasm_path" \
     --source-account "$SOURCE_ACCOUNT" \
-    --network "$NETWORK")
-  WASM_HASH[$crate]="$hash"
-  echo "[deploy] uploaded $crate → $hash"
-done
+    --network "$NETWORK" 2>/dev/null | tail -1)
+  echo "[deploy] uploaded $crate → $hash" >&2
+  echo "$hash"
+}
+
+# Upload each WASM. Idempotent — content-addressed by hash.
+ADAPTER_HASH=$(upload_crate "blend-sy-adapter")
+SPLITTER_HASH=$(upload_crate "splitter")
+MARKET_HASH=$(upload_crate "yield-market")
+ROUTER_HASH=$(upload_crate "router")
 
 # Deploy the contract instances we need. Counts:
 #   - 3 BlendSY adapters (USDC, EURC, XLM)
@@ -70,19 +86,19 @@ deploy_instance() {
   cid=$(stellar contract deploy \
     --wasm-hash "$hash" \
     --source-account "$SOURCE_ACCOUNT" \
-    --network "$NETWORK")
-  echo "[deploy] $label → $cid"
+    --network "$NETWORK" 2>/dev/null | tail -1)
+  echo "[deploy] $label → $cid" >&2
   echo "$cid"
 }
 
-USDC_SY=$(deploy_instance "usdc-sy" "${WASM_HASH[blend-sy-adapter]}")
-EURC_SY=$(deploy_instance "eurc-sy" "${WASM_HASH[blend-sy-adapter]}")
-XLM_SY=$(deploy_instance "xlm-sy"  "${WASM_HASH[blend-sy-adapter]}")
-USDC_SPLITTER=$(deploy_instance "usdc-splitter" "${WASM_HASH[splitter]}")
-EURC_SPLITTER=$(deploy_instance "eurc-splitter" "${WASM_HASH[splitter]}")
-USDC_MARKET=$(deploy_instance "usdc-market" "${WASM_HASH[yield-market]}")
-EURC_MARKET=$(deploy_instance "eurc-market" "${WASM_HASH[yield-market]}")
-ROUTER=$(deploy_instance "router" "${WASM_HASH[router]}")
+USDC_SY=$(deploy_instance "usdc-sy" "$ADAPTER_HASH")
+EURC_SY=$(deploy_instance "eurc-sy" "$ADAPTER_HASH")
+XLM_SY=$(deploy_instance "xlm-sy"  "$ADAPTER_HASH")
+USDC_SPLITTER=$(deploy_instance "usdc-splitter" "$SPLITTER_HASH")
+EURC_SPLITTER=$(deploy_instance "eurc-splitter" "$SPLITTER_HASH")
+USDC_MARKET=$(deploy_instance "usdc-market" "$MARKET_HASH")
+EURC_MARKET=$(deploy_instance "eurc-market" "$MARKET_HASH")
+ROUTER=$(deploy_instance "router" "$ROUTER_HASH")
 
 # Resolve canonical SAC IDs for the testnet assets we accept.
 USDC_ASSET="${USDC_ASSET_CONTRACT_ID:-}"
@@ -92,17 +108,17 @@ if [[ -z "$USDC_ASSET" || -z "$EURC_ASSET" ]]; then
   exit 1
 fi
 # Native XLM SAC has a well-known address per network.
-XLM_SAC=$(stellar contract id asset --asset native --network "$NETWORK")
+XLM_SAC=$(stellar contract id asset --asset native --network "$NETWORK" 2>&1 | tail -1)
 
 cat > "$DEPLOYED_FILE" <<JSON
 {
   "network": "$NETWORK",
   "deployedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "wasmHashes": {
-    "blendSyAdapter": "${WASM_HASH[blend-sy-adapter]}",
-    "splitter": "${WASM_HASH[splitter]}",
-    "yieldMarket": "${WASM_HASH[yield-market]}",
-    "router": "${WASM_HASH[router]}"
+    "blendSyAdapter": "$ADAPTER_HASH",
+    "splitter": "$SPLITTER_HASH",
+    "yieldMarket": "$MARKET_HASH",
+    "router": "$ROUTER_HASH"
   },
   "contracts": {
     "router": "$ROUTER",

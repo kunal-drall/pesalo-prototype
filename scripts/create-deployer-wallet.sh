@@ -27,25 +27,25 @@ command -v stellar >/dev/null 2>&1 || {
   exit 1
 }
 
-# Configure network alias if it isn't already (idempotent — stellar CLI emits
-# a no-op when the alias matches what's already stored).
+# Configure network alias if it isn't already (idempotent — stellar CLI
+# emits a no-op when the alias matches what's already stored).
 if [[ "$NETWORK" == "testnet" ]]; then
   stellar network add testnet \
     --rpc-url https://soroban-testnet.stellar.org \
     --network-passphrase "Test SDF Network ; September 2015" \
-    --global 2>/dev/null || true
+    2>/dev/null || true
 fi
 
 # Generate the key if it doesn't already exist.
-if stellar keys ls --global 2>/dev/null | awk '{print $1}' | grep -qx "$NAME"; then
+if stellar keys ls 2>/dev/null | awk '{print $1}' | grep -qx "$NAME"; then
   ADDRESS=$(stellar keys address "$NAME")
   echo "[wallet] reusing existing identity '$NAME' → $ADDRESS"
 else
   echo "[wallet] generating new identity '$NAME' on $NETWORK"
   if [[ "$NETWORK" == "testnet" ]]; then
-    stellar keys generate "$NAME" --network "$NETWORK" --global --fund
+    stellar keys generate "$NAME" --network "$NETWORK" --fund
   else
-    stellar keys generate "$NAME" --network "$NETWORK" --global
+    stellar keys generate "$NAME" --network "$NETWORK"
     echo "[wallet] WARNING: identity created but not funded — fund it manually before deploying."
   fi
   ADDRESS=$(stellar keys address "$NAME")

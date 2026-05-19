@@ -49,16 +49,24 @@ async function refreshRates(): Promise<RatesPayload> {
   const fixed = await Promise.all(
     markets.map(async (m): Promise<RateInfo | null> => {
       try {
-        const [impliedRateWad, maturityUnixBig] = await Promise.all([
+        const [impliedRateWad, state] = await Promise.all([
           readContract<bigint>(m.market, "implied_rate", []),
-          readContract<bigint>(m.market, "maturity", []),
+          readContract<{
+            maturity: bigint;
+            created_at: bigint;
+          }>(m.market, "state", []),
         ]);
-        const maturityUnix = Number(maturityUnixBig);
+        const maturityUnix = Number(state.maturity);
+        const createdAtUnix = Number(state.created_at);
+        const periodDays = Math.max(1, Math.round((maturityUnix - createdAtUnix) / 86_400));
         const daysRemaining = Math.max(
           0,
           Math.ceil((maturityUnix - Math.floor(Date.now() / 1000)) / 86_400),
         );
-        const fixedAPY = wadToPercent(impliedRateWad);
+        // implied_rate is the constant *period* rate the curve fits to. Annualize
+        // for display:  APY = implied_rate × 365 / period_days.
+        const periodRate = Number(impliedRateWad) / Number(WAD);
+        const fixedAPY = (periodRate * 365) / periodDays * 100;
         return {
           asset: m.asset,
           maturity: new Date(maturityUnix * 1000).toISOString(),
