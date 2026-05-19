@@ -55,6 +55,15 @@ export function useTransaction() {
         setStatus("submitting");
         const parts = extractInvocationParts(signed, stellarClient.networkPassphrase);
         const receipt = await submitSorobanCall(parts);
+
+        // Channels recognises read-only calls and skips submission. Any user
+        // action that reaches this hook is expected to mutate state, so a
+        // missing hash is treated as a protocol error.
+        if (!receipt.hash) {
+          throw new Error(
+            `Channels marked this transaction as ${receipt.status ?? "readonly"} — nothing was submitted on chain`,
+          );
+        }
         setTxHash(receipt.hash);
 
         setStatus("confirming");
