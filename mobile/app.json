@@ -18,7 +18,11 @@
       "package": "fun.pesalo",
       "adaptiveIcon": {
         "backgroundColor": "#080B11"
-      }
+      },
+      "permissions": [
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -31,6 +35,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "03f27233-d502-418c-8ea4-0a5e054e63e7"
+      }
+    },
+    "owner": "twenty9projects-lab"
   }
 }
