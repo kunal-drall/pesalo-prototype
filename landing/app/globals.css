@@ -1,15 +1,34 @@
 :root {
-  color-scheme: dark;
-  --bg: #080b11;
-  --surface: #0e1219;
-  --surface-elevated: #151b24;
-  --text: #f2f4f7;
-  --muted: #94a3b8;
-  --faint: #64748b;
+  color-scheme: light dark;
+  --bg: #f6f8fb;
+  --surface: #ffffff;
+  --surface-elevated: #f0f3f7;
+  --text: #0e1219;
+  --muted: #4d5b6e;
+  --faint: #6e7a8a;
   --green: #16a367;
-  --green-light: #1ecc7f;
-  --gold: #f5b731;
-  --border: #1e293b;
+  --green-light: #16a367;
+  --gold: #b87b0a;
+  --border: #e0e6ef;
+  --shadow: 0 30px 80px rgb(8 11 17 / 0.08);
+  --shadow-tight: 0 8px 24px rgb(8 11 17 / 0.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #080b11;
+    --surface: #0e1219;
+    --surface-elevated: #151b24;
+    --text: #f2f4f7;
+    --muted: #94a3b8;
+    --faint: #64748b;
+    --green: #16a367;
+    --green-light: #1ecc7f;
+    --gold: #f5b731;
+    --border: #1e293b;
+    --shadow: 0 32px 90px rgb(0 0 0 / 0.45);
+    --shadow-tight: 0 12px 32px rgb(0 0 0 / 0.4);
+  }
 }
 
 * {
@@ -26,6 +45,8 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 a {
@@ -34,25 +55,28 @@ a {
 }
 
 .page {
-  min-height: 100vh;
-  overflow: hidden;
+  min-height: 100dvh;
+  overflow-x: hidden;
 }
+
+/* ─── Top nav ─────────────────────────────────────────────────────────── */
 
 .nav {
   align-items: center;
   display: flex;
+  gap: 16px;
   justify-content: space-between;
   margin: 0 auto;
-  max-width: 1120px;
-  padding: 24px;
+  max-width: 1180px;
+  padding: 24px clamp(16px, 4vw, 32px);
 }
 
 .brand {
   align-items: center;
   display: flex;
-  gap: 12px;
   font-size: 18px;
   font-weight: 700;
+  gap: 12px;
   letter-spacing: -0.02em;
 }
 
@@ -78,25 +102,27 @@ a {
 .nav-link {
   color: var(--muted);
   font-size: 14px;
+  word-break: break-all;
 }
 
+/* ─── Hero ────────────────────────────────────────────────────────────── */
+
 .hero {
+  align-items: center;
   display: grid;
-  gap: 56px;
-  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: clamp(32px, 6vw, 72px);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 420px);
   margin: 0 auto;
-  max-width: 1120px;
-  min-height: calc(100vh - 86px);
-  padding: 64px 24px 96px;
+  max-width: 1180px;
+  padding: clamp(32px, 6vw, 72px) clamp(16px, 4vw, 32px) clamp(56px, 8vw, 120px);
 }
 
 .hero-copy {
-  align-self: center;
-  max-width: 620px;
+  max-width: 640px;
 }
 
 h1 {
-  font-size: clamp(56px, 9vw, 108px);
+  font-size: clamp(56px, 11vw, 120px);
   letter-spacing: -0.075em;
   line-height: 0.92;
   margin: 0;
@@ -104,7 +130,7 @@ h1 {
 
 .subtitle {
   color: var(--muted);
-  font-size: 21px;
+  font-size: clamp(17px, 2vw, 21px);
   line-height: 1.5;
   margin: 28px 0 0;
   max-width: 540px;
@@ -113,6 +139,7 @@ h1 {
 .actions {
   align-items: center;
   display: flex;
+  flex-wrap: wrap;
   gap: 14px;
   margin-top: 40px;
 }
@@ -125,17 +152,19 @@ h1 {
   background: linear-gradient(180deg, var(--green), #0d7a4a);
   border: 0;
   border-radius: 18px;
-  color: #080b11;
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--green) 35%, transparent);
+  color: #f2f4f7;
   cursor: pointer;
   display: inline-flex;
   font-family: inherit;
   font-size: 16px;
   font-weight: 700;
   padding: 16px 22px;
-  transition: transform 120ms ease, opacity 120ms ease;
+  transition: transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
 }
 
 .button:hover {
+  box-shadow: 0 10px 26px color-mix(in srgb, var(--green) 45%, transparent);
   transform: translateY(-1px);
 }
 
@@ -145,13 +174,17 @@ h1 {
 
 .button:disabled {
   cursor: not-allowed;
-  opacity: 0.7;
+  opacity: 0.65;
   transform: none;
 }
 
 .secondary {
   color: var(--muted);
   font-size: 15px;
+}
+
+.secondary:hover {
+  color: var(--text);
 }
 
 .visually-hidden {
@@ -166,6 +199,8 @@ h1 {
   width: 1px;
 }
 
+/* ─── Early access form ──────────────────────────────────────────────── */
+
 .early-access-form {
   margin-top: 40px;
   max-width: 540px;
@@ -176,14 +211,18 @@ h1 {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 18px;
+  box-shadow: var(--shadow-tight);
   display: flex;
   gap: 8px;
   padding: 6px;
-  transition: border-color 160ms ease;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 
 .early-access-row:focus-within {
   border-color: color-mix(in srgb, var(--green) 65%, transparent);
+  box-shadow:
+    var(--shadow-tight),
+    0 0 0 4px color-mix(in srgb, var(--green) 12%, transparent);
 }
 
 .early-access-input {
@@ -195,7 +234,7 @@ h1 {
   font-size: 16px;
   min-width: 0;
   outline: none;
-  padding: 10px 12px;
+  padding: 12px 14px;
 }
 
 .early-access-input::placeholder {
@@ -220,158 +259,96 @@ h1 {
 }
 
 .early-access-feedback.is-success {
-  color: var(--green-light);
+  color: var(--green);
 }
 
 .early-access-feedback.is-error {
-  color: #ff8082;
+  color: #d33232;
 }
 
-@media (max-width: 560px) {
+@media (prefers-color-scheme: dark) {
+  .early-access-feedback.is-success {
+    color: var(--green-light);
+  }
+  .early-access-feedback.is-error {
+    color: #ff8082;
+  }
+}
+
+@media (max-width: 540px) {
   .early-access-row {
     flex-direction: column;
   }
-
   .early-access-submit {
     width: 100%;
   }
 }
 
-.phone {
-  align-self: center;
-  background:
-    radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--green) 24%, transparent), transparent 34%),
-    linear-gradient(180deg, #151b24, #080b11);
-  border: 1px solid var(--border);
-  border-radius: 42px;
-  box-shadow: 0 32px 90px rgb(0 0 0 / 0.45), 0 0 40px color-mix(in srgb, var(--green) 12%, transparent);
-  height: 720px;
-  padding: 18px;
-  width: 360px;
-}
+/* ─── Phone screenshot (right column) ────────────────────────────────── */
 
-.screen {
-  background: var(--bg);
-  border: 1px solid #17202b;
-  border-radius: 32px;
-  height: 100%;
-  overflow: hidden;
-  padding: 28px 22px;
-}
-
-.screen-label {
-  color: var(--faint);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.balance {
-  font-size: 42px;
-  font-weight: 750;
-  letter-spacing: -0.06em;
-  line-height: 1;
-  margin-top: 10px;
-}
-
-.gain {
-  color: var(--green-light);
-  font-size: 14px;
-  margin-top: 8px;
-}
-
-.pills {
-  display: grid;
-  gap: 10px;
-  grid-template-columns: 1fr 1fr;
-  margin-top: 24px;
-}
-
-.pill {
-  background: var(--surface-elevated);
-  border-radius: 999px;
-  color: var(--text);
-  font-size: 14px;
-  padding: 12px;
-  text-align: center;
-}
-
-.asset-row {
-  align-items: center;
-  border-top: 1px solid var(--border);
+.phone-wrap {
   display: flex;
-  gap: 12px;
-  min-height: 72px;
-}
-
-.asset-dot {
-  align-items: center;
-  background: var(--surface-elevated);
-  border-radius: 18px;
-  color: var(--green-light);
-  display: flex;
-  font-weight: 800;
-  height: 36px;
   justify-content: center;
-  width: 36px;
+  /* Slight pedestal underneath the phone — sized to track the image. */
+  position: relative;
 }
 
-.asset-copy {
-  flex: 1;
+.phone-wrap::before {
+  background: radial-gradient(
+    ellipse at center,
+    color-mix(in srgb, var(--green) 18%, transparent),
+    transparent 70%
+  );
+  border-radius: 50%;
+  content: "";
+  filter: blur(40px);
+  height: 60%;
+  left: 50%;
+  position: absolute;
+  top: 22%;
+  transform: translateX(-50%);
+  width: 70%;
+  z-index: 0;
 }
 
-.asset-name,
-.asset-amount {
-  font-size: 15px;
-  font-weight: 650;
+.phone-screenshot {
+  border-radius: clamp(28px, 4vw, 44px);
+  box-shadow: var(--shadow);
+  display: block;
+  height: auto;
+  max-height: min(80vh, 760px);
+  max-width: 100%;
+  position: relative;
+  width: auto;
+  z-index: 1;
 }
 
-.asset-symbol,
-.asset-usd {
-  color: var(--muted);
-  font-size: 13px;
-  margin-top: 3px;
-}
+/* ─── Responsive breakpoints ─────────────────────────────────────────── */
 
-.asset-amounts {
-  text-align: right;
-}
-
-.savings-card {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--green) 10%, var(--surface)), var(--surface));
-  border: 1px solid var(--border);
-  border-radius: 22px;
-  margin-top: 28px;
-  padding: 18px;
-}
-
-.savings-title {
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.savings-money {
-  font-size: 24px;
-  font-weight: 750;
-  margin-top: 8px;
-}
-
-.savings-rate {
-  color: var(--gold);
-  font-size: 14px;
-  margin-top: 8px;
-}
-
-@media (max-width: 860px) {
+@media (max-width: 960px) {
   .hero {
     grid-template-columns: 1fr;
-    padding-top: 36px;
+    padding-bottom: clamp(40px, 12vw, 80px);
   }
 
-  .phone {
-    height: 620px;
-    justify-self: center;
-    width: min(360px, 100%);
+  .hero-copy {
+    max-width: none;
+  }
+
+  .phone-wrap {
+    grid-row: 1;
+    margin-bottom: clamp(8px, 4vw, 40px);
+  }
+
+  .phone-screenshot {
+    max-height: 60vh;
+  }
+}
+
+@media (max-width: 560px) {
+  .nav-link {
+    /* Email becomes long — let it wrap onto the next line gracefully. */
+    text-align: right;
+    font-size: 13px;
   }
 }
