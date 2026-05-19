@@ -34,7 +34,11 @@ export const rateService = {
       maturity: rate.maturity,
       daysRemaining: rate.days,
       tvlSy: 0,
-      impliedRateWad: BigInt(Math.round(rate.fixedAPY * Number(WAD) / 100)),
+      // Serialise as decimal string so Express's JSON.stringify doesn't choke
+      // on BigInt (TC39 still hasn't finalised native JSON support).
+      impliedRateWad: BigInt(
+        Math.round((rate.fixedAPY * Number(WAD)) / 100),
+      ).toString(),
       impliedApy: rate.fixedAPY,
     }));
   },

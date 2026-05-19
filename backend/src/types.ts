@@ -60,6 +60,7 @@ export type MarketSnapshot = {
   maturity: string;
   daysRemaining: number;
   tvlSy: number;
-  impliedRateWad: bigint;
+  /// Serialised as a decimal string for JSON-safety.
+  impliedRateWad: string;
   impliedApy: number;
 };

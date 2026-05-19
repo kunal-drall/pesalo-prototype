@@ -3,6 +3,7 @@ import {
   Address,
   BASE_FEE,
   Contract,
+  Keypair,
   TransactionBuilder,
   rpc,
   scValToNative,
@@ -11,7 +12,11 @@ import {
 
 import { config } from "../config";
 
-const STUB_ACCOUNT = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+// A throwaway but valid Stellar G-address used purely to make the Soroban
+// RPC simulator happy. We never sign or submit anything as this account —
+// the backend is read-only — but the SDK requires a strkey-valid public key
+// for the placeholder source. Generated once per process boot.
+const STUB_ACCOUNT = Keypair.random().publicKey();
 
 const server = new rpc.Server(config.sorobanRpcUrl, { allowHttp: false });
 

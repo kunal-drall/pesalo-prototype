@@ -4,12 +4,17 @@ import {
   BASE_FEE,
   Contract,
   Horizon,
+  Keypair,
   Networks,
   TransactionBuilder,
   rpc,
   scValToNative,
   xdr,
 } from "@stellar/stellar-sdk";
+
+// Throwaway but strkey-valid G-address used only as the source for
+// read-only Soroban simulations. We never sign or submit with it.
+const SIMULATION_STUB = Keypair.random().publicKey();
 
 import {
   DEFAULT_HORIZON_URL,
@@ -65,10 +70,7 @@ export class StellarClient {
     sourceAddress?: string,
   ): Promise<T> {
     const contract = new Contract(contractId);
-    // Soroban RPC simulation does not require a real funded account — we
-    // use a placeholder G-account with a zero sequence number purely so the
-    // SDK can serialize the envelope. Any GA…AAA stub works.
-    const stub = sourceAddress ?? "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+    const stub = sourceAddress ?? SIMULATION_STUB;
     const account = new Account(stub, "0");
     const tx = new TransactionBuilder(account, {
       fee: BASE_FEE,
