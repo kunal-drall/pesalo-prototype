@@ -1,6 +1,7 @@
 import * as Haptics from "expo-haptics";
 import { useCallback, useState } from "react";
 
+import { reportError } from "@/lib/observability/sentry";
 import { signTransaction } from "@/lib/passkey";
 import { stellarClient } from "@/lib/stellar/client";
 import {
@@ -71,6 +72,7 @@ export function useTransaction() {
           caught instanceof Error ? caught.message : "Something went wrong. Please try again.";
         setStatus("error");
         setError(message);
+        reportError(caught, { phase: "useTransaction" });
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         return { hash: null, error: message };
       }

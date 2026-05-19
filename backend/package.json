@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@sentry/node": "^10.53.1",
     "@stellar/stellar-sdk": "latest",
     "cors": "latest",
     "dotenv": "latest",
