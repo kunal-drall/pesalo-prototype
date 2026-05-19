@@ -1,4 +1,4 @@
-export const PESALO_DOMAIN = "pesalo.app";
+export const PESALO_DOMAIN = "pesalo.fun";
 export const STELLAR_TESTNET_PASSPHRASE = "Test SDF Network ; September 2015";
 
 export const DEFAULT_RPC_URL =

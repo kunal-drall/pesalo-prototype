@@ -8,7 +8,7 @@ Pesalo is a mobile savings wallet on Stellar. Users authenticate with device pas
 contracts/        Rust / Soroban contracts and the yield-math library
 mobile/           Expo React Native app (iOS + Android from one codebase)
 backend/          TypeScript API: rate, price, position, activity feeds
-landing/          Next.js landing page (pesalo.app) + AASA + assetlinks
+landing/          Next.js landing page (pesalo.fun) + AASA + assetlinks
 scripts/          Deployment + initialization shell scripts
 validation/       Python reference math used to cross-validate yield-math
 ```

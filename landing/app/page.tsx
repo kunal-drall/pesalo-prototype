@@ -14,8 +14,8 @@ export default function Home() {
           </span>
           Pesalo
         </a>
-        <a className="nav-link" href="mailto:hello@pesalo.app">
-          hello@pesalo.app
+        <a className="nav-link" href="mailto:hello@pesalo.fun">
+          hello@pesalo.fun
         </a>
       </nav>
       <section className="hero">
@@ -25,7 +25,7 @@ export default function Home() {
             A passkey-first savings wallet for USDC, EURC, and XLM. Deposit, earn, send, and receive without seed phrases.
           </p>
           <div className="actions">
-            <a className="button" href="mailto:hello@pesalo.app?subject=Pesalo%20early%20access">
+            <a className="button" href="mailto:hello@pesalo.fun?subject=Pesalo%20early%20access">
               Request early access
             </a>
             <a className="secondary" href="/privacy">

@@ -8,14 +8,14 @@
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "ios": {
-      "bundleIdentifier": "app.pesalo.Pesalo",
+      "bundleIdentifier": "fun.pesalo.Pesalo",
       "associatedDomains": [
-        "webcredentials:pesalo.app"
+        "webcredentials:pesalo.fun"
       ],
       "supportsTablet": false
     },
     "android": {
-      "package": "app.pesalo",
+      "package": "fun.pesalo",
       "adaptiveIcon": {
         "backgroundColor": "#080B11"
       }

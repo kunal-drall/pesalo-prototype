@@ -8,7 +8,7 @@ export default function AboutScreen() {
     <Screen>
       <Text style={styles.title}>About Pesalo</Text>
       <Text style={styles.copy}>Pesalo helps you save in USDC, EURC, and XLM with passkey-only access.</Text>
-      <Text style={styles.copy}>hello@pesalo.app</Text>
+      <Text style={styles.copy}>hello@pesalo.fun</Text>
     </Screen>
   );
 }
