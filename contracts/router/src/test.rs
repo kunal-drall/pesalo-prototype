@@ -101,9 +101,9 @@ fn setup<'a>() -> World<'a> {
     router.initialize(&admin);
     splitter.set_minter(&router_id, &true);
 
-    // Seed liquidity in the market so the AMM can trade.
-    sy.deposit(&lp, &10_000_000_000i128);     // 1000 USDC worth → SY
-    splitter.mint(&lp, &2_000_000_000i128);   // 200 PT + 200 YT for LP
+    // Seed liquidity so the boost path has somewhere to sell YT.
+    sy.deposit(&lp, &10_000_000_000i128);
+    splitter.mint(&lp, &2_000_000_000i128);
     market.add_liquidity(&lp, &1_000_000_000i128, &1_000_000_000i128);
 
     World {
@@ -132,122 +132,193 @@ fn advance_time(env: &Env, seconds: u64) {
 }
 
 #[test]
-fn deposit_for_fixed_rate_returns_pt_and_upfront_yield() {
-    let w = setup();
-
-    let amount = 500_000_000i128; // 50 USDC
-    let underlying_before = w.underlying.balance(&w.user);
-
-    let result = w
-        .router
-        .deposit_for_fixed_rate(&w.user, &w.market_id, &amount, &0i128);
-
-    // User received PT and some upfront yield in underlying.
-    assert!(result.pt_minted > 0);
-    assert!(result.yield_underlying > 0);
-    assert_eq!(w.splitter.pt_balance(&w.user), result.pt_minted);
-    let underlying_after = w.underlying.balance(&w.user);
-    assert_eq!(
-        underlying_after,
-        underlying_before - amount + result.yield_underlying
-    );
-    // Yield should be a small fraction of the deposit (well below 20%).
-    assert!(result.yield_underlying < amount / 5);
-    assert_eq!(result.maturity, START_TS + NINETY_DAYS);
-}
-
-#[test]
-fn redeem_at_maturity_returns_principal_to_user() {
+fn auto_deposit_moves_underlying_into_sy() {
     let w = setup();
     let amount = 500_000_000i128;
-    let result = w
-        .router
-        .deposit_for_fixed_rate(&w.user, &w.market_id, &amount, &0i128);
-
-    // Fast-forward past maturity.
-    advance_time(&w.env, NINETY_DAYS + 1);
-    w.splitter.sync();
-
-    let underlying_before = w.underlying.balance(&w.user);
-    let pt_before = w.splitter.pt_balance(&w.user);
-
-    let returned = w
-        .router
-        .redeem_at_maturity(&w.user, &w.market_id, &pt_before);
-
-    assert!(returned > 0);
-    let underlying_after = w.underlying.balance(&w.user);
-    assert_eq!(underlying_after - underlying_before, returned);
-    assert_eq!(w.splitter.pt_balance(&w.user), 0);
-    // PT principal + upfront yield should cover the original deposit. In this
-    // test the SY pool never accrued any yield, so LPs absorb the locked-in
-    // rate as a loss; the user is paid out >= what they put in.
-    let total_received = returned + result.yield_underlying;
-    assert!(
-        total_received >= amount,
-        "user got {} for {} deposit",
-        total_received,
-        amount
-    );
-}
-
-#[test]
-fn deposit_for_flex_round_trips_through_sy() {
-    let w = setup();
-    let amount = 100_000_000i128;
     let underlying_before = w.underlying.balance(&w.user);
     let sy_before = w.sy.balance(&w.user);
 
     let sy_minted = w
         .router
-        .deposit_for_flex(&w.user, &w.sy_id, &amount);
+        .auto_deposit(&w.user, &w.underlying_id, &amount, &w.sy_id);
 
     assert!(sy_minted > 0);
     assert_eq!(w.sy.balance(&w.user), sy_before + sy_minted);
     assert_eq!(w.underlying.balance(&w.user), underlying_before - amount);
+    // User now holds SY (yield-bearing), no idle underlying for this amount.
 }
 
 #[test]
-fn withdraw_flex_redeems_sy_back_to_underlying() {
+fn auto_withdraw_pulls_underlying_back_through_sy() {
     let w = setup();
-    let amount = 100_000_000i128;
-    let sy_minted = w
-        .router
-        .deposit_for_flex(&w.user, &w.sy_id, &amount);
+    let amount = 200_000_000i128;
+    w.router
+        .auto_deposit(&w.user, &w.underlying_id, &amount, &w.sy_id);
 
     let underlying_before = w.underlying.balance(&w.user);
+    let sy_before = w.sy.balance(&w.user);
+
     let returned = w
         .router
-        .withdraw_flex(&w.user, &w.sy_id, &sy_minted);
+        .auto_withdraw(&w.user, &w.underlying_id, &amount, &w.sy_id);
 
-    assert!(returned > 0);
-    assert_eq!(returned, amount, "no yield ⇒ round-trip is identity");
-    assert_eq!(w.underlying.balance(&w.user), underlying_before + returned);
-    assert_eq!(w.sy.balance(&w.user), 0);
+    assert_eq!(returned, amount);
+    assert_eq!(w.underlying.balance(&w.user), underlying_before + amount);
+    assert!(w.sy.balance(&w.user) < sy_before);
 }
 
 #[test]
-fn withdraw_flex_after_yield_returns_more_underlying() {
+fn auto_withdraw_after_yield_returns_correct_underlying() {
     let w = setup();
-    let amount = 100_000_000i128;
-    let sy_minted = w
-        .router
-        .deposit_for_flex(&w.user, &w.sy_id, &amount);
+    let amount = 1_000_000_000i128; // 100 underlying units
+    w.router
+        .auto_deposit(&w.user, &w.underlying_id, &amount, &w.sy_id);
 
-    // Inject 10% yield into the SY pool.
-    let pool_balance = w.underlying.balance(&w.sy_id);
-    w.underlying_admin.mint(&w.sy_id, &(pool_balance / 10));
+    // Simulate 10% yield by minting extra underlying directly to the SY adapter
+    // (matches how the SY adapter models Blend interest accrual in passive mode).
+    w.underlying_admin.mint(&w.sy_id, &(amount / 10));
 
+    // Withdrawing the original principal back. The remaining SY position
+    // should still reflect ~10% yield earned on top.
+    let pre_underlying = w.underlying.balance(&w.user);
     let returned = w
         .router
-        .withdraw_flex(&w.user, &w.sy_id, &sy_minted);
-    assert!(returned > amount, "should get yield, got {} vs {}", returned, amount);
-    let _ = w.admin;
+        .auto_withdraw(&w.user, &w.underlying_id, &amount, &w.sy_id);
+
+    // 1-stroop rounding tolerance — mul_div(amount, WAD, rate) truncates.
+    assert!(
+        returned >= amount - 1 && returned <= amount,
+        "got {returned}, expected ~{amount}"
+    );
+    assert_eq!(w.underlying.balance(&w.user), pre_underlying + returned);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #4)")]
+fn auto_deposit_rejects_mismatched_asset() {
+    let w = setup();
+    let bogus = Address::generate(&w.env);
+    w.router
+        .auto_deposit(&w.user, &bogus, &100_000_000i128, &w.sy_id);
+}
+
+#[test]
+fn boost_locks_pt_and_returns_upfront_yield_sy() {
+    let w = setup();
+    // Get the user into auto-earn first.
+    let sy_balance = w
+        .router
+        .auto_deposit(&w.user, &w.underlying_id, &2_000_000_000i128, &w.sy_id);
+
+    let boost_amount = 500_000_000i128; // boost a portion of the SY balance
+    let result = w.router.boost(&w.user, &boost_amount, &w.market_id, &0i128);
+
+    assert!(result.pt_amount > 0);
+    assert!(result.upfront_yield_sy > 0);
+    // Boost rate should be positive and within reasonable bounds (<100%).
+    assert!(result.boost_rate_wad > 0 && result.boost_rate_wad < WAD);
+    assert_eq!(result.maturity, START_TS + NINETY_DAYS);
+
+    // User received PT (locked principal) directly.
+    assert_eq!(w.splitter.pt_balance(&w.user), result.pt_amount);
+    // User's SY balance reflects: (initial) - (boosted) + (upfront yield from YT sale).
+    let final_sy = w.sy.balance(&w.user);
+    let expected = sy_balance - boost_amount + result.upfront_yield_sy;
+    assert_eq!(final_sy, expected);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #5)")]
+fn boost_panics_below_minimum_rate() {
+    let w = setup();
+    w.router
+        .auto_deposit(&w.user, &w.underlying_id, &2_000_000_000i128, &w.sy_id);
+    // Demand an absurdly high boost rate (1000% WAD) — should fail.
+    w.router
+        .boost(&w.user, &500_000_000i128, &w.market_id, &(10 * WAD));
+}
+
+#[test]
+fn unboost_returns_sy_back_to_user() {
+    let w = setup();
+    w.router
+        .auto_deposit(&w.user, &w.underlying_id, &2_000_000_000i128, &w.sy_id);
+    let result = w
+        .router
+        .boost(&w.user, &500_000_000i128, &w.market_id, &0i128);
+
+    let sy_before = w.sy.balance(&w.user);
+    let sy_received = w.router.unboost(&w.user, &w.market_id, &result.pt_amount);
+
+    assert!(sy_received > 0);
+    assert_eq!(w.sy.balance(&w.user), sy_before + sy_received);
+    assert_eq!(w.splitter.pt_balance(&w.user), 0);
+}
+
+#[test]
+fn redeem_boost_returns_sy_at_maturity() {
+    let w = setup();
+    w.router
+        .auto_deposit(&w.user, &w.underlying_id, &2_000_000_000i128, &w.sy_id);
+    let result = w
+        .router
+        .boost(&w.user, &500_000_000i128, &w.market_id, &0i128);
+
+    advance_time(&w.env, NINETY_DAYS + 1);
+    w.splitter.sync();
+
+    let sy_before = w.sy.balance(&w.user);
+    let sy_returned = w
+        .router
+        .redeem_boost(&w.user, &w.market_id, &result.pt_amount);
+
+    assert!(sy_returned > 0);
+    assert_eq!(w.sy.balance(&w.user), sy_before + sy_returned);
+    // PT is fully redeemed.
+    assert_eq!(w.splitter.pt_balance(&w.user), 0);
+}
+
+#[test]
+fn full_lifecycle_auto_earn_boost_send() {
+    let w = setup();
+
+    // 1. Receive 200 USDC and auto-deposit.
+    let deposit_amount = 2_000_000_000i128;
+    w.router
+        .auto_deposit(&w.user, &w.underlying_id, &deposit_amount, &w.sy_id);
+
+    // 2. Boost ~30% of pool depth (≈30 USDC worth of SY).
+    let boost_amount = 300_000_000i128;
+    let boost = w
+        .router
+        .boost(&w.user, &boost_amount, &w.market_id, &0i128);
+    assert!(boost.pt_amount > 0);
+
+    // 3. Send 50 USDC: auto_withdraw 50 underlying from remaining auto-earn SY.
+    let send_amount = 500_000_000i128;
+    let withdrawn = w
+        .router
+        .auto_withdraw(&w.user, &w.underlying_id, &send_amount, &w.sy_id);
+    assert!(withdrawn >= send_amount - 1 && withdrawn <= send_amount);
+
+    // 4. Advance to maturity and redeem the boost.
+    advance_time(&w.env, NINETY_DAYS + 1);
+    w.splitter.sync();
+    let sy_back = w
+        .router
+        .redeem_boost(&w.user, &w.market_id, &boost.pt_amount);
+    assert!(sy_back > 0);
+
+    // Final state: user holds SY (still auto-earning) + the withdrawn underlying
+    // they used for sending.
+    assert!(w.sy.balance(&w.user) > 0);
+    let _ = (w.admin, w.router_id, w.splitter_id, w.lp);
 }
 
 #[test]
 #[should_panic(expected = "Error(Contract, #3)")]
-fn deposit_for_flex_rejects_zero_amount() {
+fn auto_deposit_rejects_zero_amount() {
     let w = setup();
-    w.router.deposit_for_flex(&w.user, &w.sy_id, &0i128);
+    w.router
+        .auto_deposit(&w.user, &w.underlying_id, &0i128, &w.sy_id);
 }
