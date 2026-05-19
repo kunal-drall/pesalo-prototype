@@ -10,6 +10,13 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEPLOYED_FILE="$ROOT_DIR/contracts/.deployed.json"
+DEPLOYER_ENV="$ROOT_DIR/contracts/.deployer.env"
+
+if [[ -f "$DEPLOYER_ENV" ]]; then
+  # shellcheck disable=SC1090
+  source "$DEPLOYER_ENV"
+fi
+
 NETWORK="${SOROBAN_NETWORK:-testnet}"
 SOURCE_ACCOUNT="${STELLAR_ACCOUNT:-}"
 

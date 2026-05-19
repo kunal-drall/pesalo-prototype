@@ -14,11 +14,19 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONTRACTS_DIR="$ROOT_DIR/contracts"
 DEPLOYED_FILE="$CONTRACTS_DIR/.deployed.json"
+DEPLOYER_ENV="$CONTRACTS_DIR/.deployer.env"
+
+# Auto-source deployer env produced by create-deployer-wallet.sh.
+if [[ -f "$DEPLOYER_ENV" ]]; then
+  # shellcheck disable=SC1090
+  source "$DEPLOYER_ENV"
+fi
+
 NETWORK="${SOROBAN_NETWORK:-testnet}"
 SOURCE_ACCOUNT="${STELLAR_ACCOUNT:-}"
 
 if [[ -z "$SOURCE_ACCOUNT" ]]; then
-  echo "STELLAR_ACCOUNT must name the funded Stellar CLI account used for deployments." >&2
+  echo "STELLAR_ACCOUNT not set. Run ./scripts/create-deployer-wallet.sh first." >&2
   exit 1
 fi
 

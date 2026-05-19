@@ -3,7 +3,10 @@ import { useCallback, useState } from "react";
 
 import { signTransaction } from "@/lib/passkey";
 import { stellarClient } from "@/lib/stellar/client";
-import { submitSponsoredTransaction } from "@/lib/stellar/launchtube";
+import {
+  extractInvocationParts,
+  submitSorobanCall,
+} from "@/lib/stellar/channels";
 import { useWalletStore } from "@/stores/walletStore";
 
 export type TxStatus =
@@ -16,15 +19,14 @@ export type TxStatus =
   | "error";
 
 type RunOptions = {
-  /// Skip the Launchtube hop. Useful when a contract has its own custom
-  /// submission path (none currently, but reserved).
+  /// Skip the network submission step. Useful for dry-run flows.
   skipSubmit?: boolean;
 };
 
 /// Drives the full lifecycle of a Soroban transaction from the UI:
-///   build → sign → submit (Launchtube) → poll → refresh wallet store.
-/// The status state machine lets the caller render an accurate spinner
-/// label ("Face ID…", "Submitting…", "Confirming on chain…").
+///   build → passkey sign → extract (func, auth) → OZ Channels submit → poll
+/// Refreshes the wallet store on success and emits haptic feedback on the
+/// terminal states.
 export function useTransaction() {
   const refresh = useWalletStore((s) => s.refresh);
   const [status, setStatus] = useState<TxStatus>("idle");
@@ -50,7 +52,8 @@ export function useTransaction() {
         }
 
         setStatus("submitting");
-        const receipt = await submitSponsoredTransaction(signed);
+        const parts = extractInvocationParts(signed, stellarClient.networkPassphrase);
+        const receipt = await submitSorobanCall(parts);
         setTxHash(receipt.hash);
 
         setStatus("confirming");

@@ -7,9 +7,11 @@ export const DEFAULT_HORIZON_URL =
   process.env.EXPO_PUBLIC_HORIZON_URL ?? "https://horizon-testnet.stellar.org";
 export const DEFAULT_API_URL =
   process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3001/v1";
-export const DEFAULT_LAUNCHTUBE_URL =
-  process.env.EXPO_PUBLIC_LAUNCHTUBE_URL ?? "https://testnet.launchtube.xyz";
-export const LAUNCHTUBE_TOKEN = process.env.EXPO_PUBLIC_LAUNCHTUBE_TOKEN ?? "";
+/// OpenZeppelin Stellar Channels (the relayer that replaced SDF's Launchtube).
+/// Get a testnet API key at https://channels.openzeppelin.com/testnet/gen.
+export const CHANNELS_BASE_URL =
+  process.env.EXPO_PUBLIC_CHANNELS_BASE_URL ?? "https://channels.openzeppelin.com/testnet";
+export const CHANNELS_API_KEY = process.env.EXPO_PUBLIC_CHANNELS_API_KEY ?? "";
 
 export const SUPPORTED_ASSETS = ["USDC", "EURC", "XLM"] as const;
 export type SupportedAsset = (typeof SUPPORTED_ASSETS)[number];

@@ -25,6 +25,8 @@ target/
 Cargo.lock
 
 contracts/.deployed.json
+contracts/.deployed.env
+contracts/.deployer.env
 *.wasm
 *.snap
 *.tsbuildinfo

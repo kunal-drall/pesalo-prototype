@@ -14,12 +14,22 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEPLOYED_FILE="$ROOT_DIR/contracts/.deployed.json"
+DEPLOYER_ENV="$ROOT_DIR/contracts/.deployer.env"
+
+if [[ -f "$DEPLOYER_ENV" ]]; then
+  # shellcheck disable=SC1090
+  source "$DEPLOYER_ENV"
+fi
+
 NETWORK="${SOROBAN_NETWORK:-testnet}"
 SOURCE_ACCOUNT="${STELLAR_ACCOUNT:-}"
-ADMIN_ADDRESS="${PROTOCOL_ADMIN:-$STELLAR_ACCOUNT}"
+ADMIN_ADDRESS="${PROTOCOL_ADMIN:-${DEPLOYER_ADDRESS:-}}"
 
 if [[ -z "$SOURCE_ACCOUNT" ]]; then
-  echo "STELLAR_ACCOUNT must be set." >&2; exit 1
+  echo "STELLAR_ACCOUNT not set. Run ./scripts/create-deployer-wallet.sh first." >&2; exit 1
+fi
+if [[ -z "$ADMIN_ADDRESS" ]]; then
+  echo "PROTOCOL_ADMIN (or DEPLOYER_ADDRESS) not set." >&2; exit 1
 fi
 if [[ ! -f "$DEPLOYED_FILE" ]]; then
   echo "Run scripts/deploy-contracts.sh first." >&2; exit 1
