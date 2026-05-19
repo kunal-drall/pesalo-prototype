@@ -1,5 +1,5 @@
-import "../global.css";
-
+// Node-core polyfills are installed by index.js (the app entry) before
+// expo-router scans routes.
 import { Stack } from "expo-router";
 import { useEffect } from "react";
 import { StatusBar } from "react-native";
