@@ -3,8 +3,9 @@
 mod types;
 
 use soroban_sdk::{
+    auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation},
     contract, contractclient, contracterror, contractimpl, panic_with_error, symbol_short, token,
-    Address, Env,
+    vec, Address, Env, IntoVal, Symbol, Vec,
 };
 use yield_math::constants::WAD;
 use yield_math::wad::{mul_div, wad_div};
@@ -94,6 +95,11 @@ impl Router {
         let router = env.current_contract_address();
 
         token::Client::new(&env, &asset).transfer(&user, &router, &amount);
+
+        // Pre-declare the nested `token.transfer(router → sy_adapter)` that
+        // sy.deposit will make on our behalf.
+        declare_transfer_auth(&env, &asset, &sy_adapter, amount, vec![&env]);
+
         let sy_minted = sy.deposit(&router, &amount);
         sy.transfer(&router, &user, &sy_minted);
 
@@ -134,6 +140,8 @@ impl Router {
 
         sy.transfer(&user, &router, &sy_needed);
         let returned = sy.redeem(&router, &sy_needed);
+        // No pre-auth needed for the token.transfer here — router is the
+        // direct caller of the token contract, so Soroban auto-authorizes it.
         token::Client::new(&env, &asset).transfer(&router, &user, &returned);
 
         env.events().publish(
@@ -175,7 +183,9 @@ impl Router {
         // 1. Pull SY from user → router.
         sy.transfer(&user, &router, &sy_amount);
 
-        // 2. Split SY → equal PT + YT.
+        // 2. Pre-declare the nested `sy.transfer(router → splitter)` that
+        // splitter.mint will perform, then call mint.
+        declare_transfer_auth(&env, &sy_addr, &splitter_addr, sy_amount, vec![&env]);
         let (pt_amount, yt_amount) = splitter.mint(&router, &sy_amount);
 
         // 3. Sell YT for SY (the upfront yield).
@@ -230,9 +240,21 @@ impl Router {
         let router = env.current_contract_address();
 
         splitter.pt_transfer(&user, &router, &pt_amount);
-        // Selling PT into the pool requires the market to be able to pull
-        // PT from the router; the splitter's pt_transfer_from handles this
-        // inside swap_exact_pt_for_sy via the market's own balance ledger.
+
+        // Pre-declare the nested `splitter.pt_transfer(router → market)`
+        // that the AMM will perform inside swap_exact_pt_for_sy.
+        let router_clone = router.clone();
+        let market_clone = market.clone();
+        let entry = InvokerContractAuthEntry::Contract(SubContractInvocation {
+            context: ContractContext {
+                contract: splitter_addr.clone(),
+                fn_name: Symbol::new(&env, "pt_transfer"),
+                args: (router_clone, market_clone, pt_amount).into_val(&env),
+            },
+            sub_invocations: vec![&env],
+        });
+        env.authorize_as_current_contract(vec![&env, entry]);
+
         let sy_received = market_client.swap_exact_pt_for_sy(&router, &pt_amount, &0i128);
         sy.transfer(&router, &user, &sy_received);
 
@@ -279,6 +301,30 @@ fn ensure_positive(env: &Env, amount: i128) {
     if amount <= 0 {
         panic_with_error!(env, Error::InvalidAmount);
     }
+}
+
+/// Pre-declare a single nested `token.transfer(from=router, to, amount)`
+/// sub-invocation. Soroban requires the calling contract to advertise these
+/// before they happen — otherwise the inner contract's `require_auth(router)`
+/// fails with InvalidAction. See:
+/// <https://developers.stellar.org/docs/build/guides/auth/contract-as-caller>
+fn declare_transfer_auth(
+    env: &Env,
+    asset: &Address,
+    to: &Address,
+    amount: i128,
+    sub: Vec<InvokerContractAuthEntry>,
+) {
+    let router = env.current_contract_address();
+    let entry = InvokerContractAuthEntry::Contract(SubContractInvocation {
+        context: ContractContext {
+            contract: asset.clone(),
+            fn_name: Symbol::new(env, "transfer"),
+            args: (router, to.clone(), amount).into_val(env),
+        },
+        sub_invocations: sub,
+    });
+    env.authorize_as_current_contract(vec![env, entry]);
 }
 
 fn ensure_underlying_match(env: &Env, sy: &SyClient, expected: &Address) {
