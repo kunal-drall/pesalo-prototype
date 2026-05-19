@@ -3,13 +3,35 @@
 mod types;
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, panic_with_error, symbol_short, token, Address, Env,
-    String,
+    contract, contractclient, contracterror, contractimpl, panic_with_error, symbol_short, token,
+    vec, Address, Env, String, Vec,
 };
 use yield_math::constants::WAD;
 use yield_math::wad::mul_div;
 
-pub use types::{AdapterConfig, AllowanceKey, DataKey};
+pub use types::{
+    AdapterConfig, AllowanceKey, BLEND_REQ_SUPPLY, BLEND_REQ_WITHDRAW, BlendRequest, DataKey,
+};
+
+/// Minimal client view of Blend Capital V2's Pool contract. `submit` mirrors
+/// `pool/src/contract.rs::submit` and `underlying_balance` mirrors the
+/// view helper Blend pools expose for reading a user's underlying-denominated
+/// supply position (b_token count × b_rate). Tests use a small mock pool that
+/// implements the same trait; production wires this to the live Blend pool.
+#[contractclient(name = "BlendPoolClient")]
+pub trait BlendPool {
+    fn submit(
+        env: Env,
+        from: Address,
+        spender: Address,
+        to: Address,
+        requests: Vec<BlendRequest>,
+    );
+
+    /// Returns `user`'s current underlying-denominated supply value for
+    /// `asset`, reflecting accrued interest.
+    fn underlying_balance(env: Env, user: Address, asset: Address) -> i128;
+}
 
 /// Storage TTL bounds (~1 day low watermark, ~30 day extend target).
 pub const TTL_LOW: u32 = 17_280;
@@ -82,7 +104,28 @@ impl BlendSyAdapter {
         env.storage().instance().extend_ttl(TTL_LOW, TTL_BUMP);
     }
 
+    /// Wire this adapter to a Blend Pool. Once set, deposits forward into the
+    /// pool (Supply) and redemptions pull from it (Withdraw). Unset by passing
+    /// the adapter's own address to clear, or by re-initialising the contract.
+    pub fn set_blend_pool(env: Env, pool: Address) {
+        let admin = read_admin(&env);
+        admin.require_auth();
+        if pool == env.current_contract_address() {
+            env.storage().instance().remove(&DataKey::BlendPool);
+        } else {
+            env.storage().instance().set(&DataKey::BlendPool, &pool);
+        }
+        env.storage().instance().extend_ttl(TTL_LOW, TTL_BUMP);
+    }
+
+    /// Read the configured Blend Pool address (or None).
+    pub fn blend_pool(env: Env) -> Option<Address> {
+        env.storage().instance().get(&DataKey::BlendPool)
+    }
+
     /// Deposit underlying tokens, receive SY at the current exchange rate.
+    /// When a Blend pool is configured the underlying is forwarded straight
+    /// into the pool (Supply request) so it can start accruing yield.
     /// Returns the SY amount minted.
     pub fn deposit(env: Env, from: Address, amount: i128) -> i128 {
         from.require_auth();
@@ -91,11 +134,25 @@ impl BlendSyAdapter {
 
         let underlying = read_underlying(&env);
         let token = token::Client::new(&env, &underlying);
+
+        let pool_before = current_underlying_value(&env);
+        let supply = read_supply(&env);
+
         token.transfer(&from, &env.current_contract_address(), &amount);
 
-        let supply = read_supply(&env);
-        let pool_after = token.balance(&env.current_contract_address());
-        let pool_before = pool_after - amount;
+        if let Some(blend_pool) = env.storage().instance().get::<DataKey, Address>(&DataKey::BlendPool) {
+            // Approve Blend to pull the underlying and submit a Supply request.
+            // Supply moves the underlying from the adapter into the pool and
+            // credits the adapter with bToken supply.
+            let self_addr = env.current_contract_address();
+            let request = BlendRequest {
+                request_type: BLEND_REQ_SUPPLY,
+                address: underlying.clone(),
+                amount,
+            };
+            let blend = BlendPoolClient::new(&env, &blend_pool);
+            blend.submit(&self_addr, &self_addr, &self_addr, &vec![&env, request]);
+        }
 
         let sy_minted = if supply == 0 || pool_before <= 0 {
             amount
@@ -113,8 +170,8 @@ impl BlendSyAdapter {
         sy_minted
     }
 
-    /// Burn SY and receive proportional underlying.
-    /// Returns the underlying amount returned.
+    /// Burn SY and receive proportional underlying. Pulls from the configured
+    /// Blend pool when set; otherwise pays out from the adapter's own balance.
     pub fn redeem(env: Env, from: Address, sy_amount: i128) -> i128 {
         from.require_auth();
         ensure_active(&env);
@@ -127,12 +184,26 @@ impl BlendSyAdapter {
 
         let underlying = read_underlying(&env);
         let token = token::Client::new(&env, &underlying);
-        let pool = token.balance(&env.current_contract_address());
-        let amount = mul_div(sy_amount, pool, supply);
+        let pool_value = current_underlying_value(&env);
+        let amount = mul_div(sy_amount, pool_value, supply);
         ensure_positive(&env, amount);
 
         burn_internal(&env, &from, sy_amount);
-        token.transfer(&env.current_contract_address(), &from, &amount);
+
+        if let Some(blend_pool) = env.storage().instance().get::<DataKey, Address>(&DataKey::BlendPool) {
+            // Blend's submit `to` argument routes the withdrawn underlying
+            // directly to the user, skipping a hop through the adapter.
+            let self_addr = env.current_contract_address();
+            let request = BlendRequest {
+                request_type: BLEND_REQ_WITHDRAW,
+                address: underlying.clone(),
+                amount,
+            };
+            let blend = BlendPoolClient::new(&env, &blend_pool);
+            blend.submit(&self_addr, &self_addr, &from, &vec![&env, request]);
+        } else {
+            token.transfer(&env.current_contract_address(), &from, &amount);
+        }
 
         env.events().publish(
             (symbol_short!("redeem"), from.clone()),
@@ -142,16 +213,23 @@ impl BlendSyAdapter {
     }
 
     /// Current exchange rate (WAD): how much underlying one SY is worth.
-    /// Returns WAD (1.0) when supply is zero.
+    /// Returns WAD (1.0) when supply is zero. Consults the configured Blend
+    /// pool's current supply value when set.
     pub fn exchange_rate(env: Env) -> i128 {
         let supply = read_supply(&env);
         if supply == 0 {
             return WAD;
         }
-        let underlying = read_underlying(&env);
-        let token = token::Client::new(&env, &underlying);
-        let pool = token.balance(&env.current_contract_address());
-        mul_div(pool, WAD, supply)
+        let value = current_underlying_value(&env);
+        mul_div(value, WAD, supply)
+    }
+
+    /// Reports the adapter's current underlying value (in underlying token
+    /// units). When wired to Blend this should reflect the b_token position
+    /// after Blend's interest accrual; when in passive mode it's the
+    /// contract's own token balance.
+    pub fn underlying_value(env: Env) -> i128 {
+        current_underlying_value(&env)
     }
 
     /// SY balance of an address.
@@ -297,6 +375,24 @@ fn read_balance(env: &Env, address: &Address) -> i128 {
         .persistent()
         .get(&DataKey::Balance(address.clone()))
         .unwrap_or(0)
+}
+
+/// Compute the adapter's current underlying-denominated value. When a Blend
+/// pool is wired, the value lives inside that pool and we ask it directly.
+/// Otherwise the value is the adapter's own underlying-token balance.
+fn current_underlying_value(env: &Env) -> i128 {
+    if let Some(pool) = env
+        .storage()
+        .instance()
+        .get::<DataKey, Address>(&DataKey::BlendPool)
+    {
+        let blend = BlendPoolClient::new(env, &pool);
+        let underlying = read_underlying(env);
+        return blend.underlying_balance(&env.current_contract_address(), &underlying);
+    }
+    let underlying = read_underlying(env);
+    let tok = token::Client::new(env, &underlying);
+    tok.balance(&env.current_contract_address())
 }
 
 fn write_balance(env: &Env, address: &Address, value: i128) {

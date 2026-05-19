@@ -295,3 +295,154 @@ fn deposit_requires_underlying_auth_for_transfer() {
     // suppress unused warnings on shared fixture struct
     let _ = (admin, underlying_admin);
 }
+
+/* ------- Blend delegate mode ------- */
+
+mod mock_blend {
+    use super::*;
+    use soroban_sdk::{contract, contractimpl, contracttype, token};
+
+    #[derive(Clone)]
+    #[contracttype]
+    pub enum DataKey {
+        Supply(Address),
+        Rate,
+    }
+
+    /// Minimal Blend pool fixture: tracks each user's underlying-denominated
+    /// supply and applies an admin-driven "interest" factor. Mirrors the
+    /// Blend Capital V2 `submit` + `underlying_balance` surface that our
+    /// adapter targets in production.
+    #[contract]
+    pub struct MockBlendPool;
+
+    #[contractimpl]
+    impl MockBlendPool {
+        pub fn submit(
+            env: Env,
+            from: Address,
+            _spender: Address,
+            to: Address,
+            requests: Vec<BlendRequest>,
+        ) {
+            from.require_auth();
+            for req in requests.iter() {
+                let underlying = req.address.clone();
+                let tok = token::Client::new(&env, &underlying);
+                let pool_addr = env.current_contract_address();
+                if req.request_type == BLEND_REQ_SUPPLY {
+                    tok.transfer(&from, &pool_addr, &req.amount);
+                    let supply: i128 = env
+                        .storage()
+                        .persistent()
+                        .get(&DataKey::Supply(from.clone()))
+                        .unwrap_or(0);
+                    env.storage()
+                        .persistent()
+                        .set(&DataKey::Supply(from.clone()), &(supply + req.amount));
+                } else if req.request_type == BLEND_REQ_WITHDRAW {
+                    let scaled = scaled_balance(&env, &from);
+                    if scaled < req.amount {
+                        panic!("withdraw exceeds supply");
+                    }
+                    let rate = current_rate(&env);
+                    let underlying_units = mul_div(req.amount, WAD, rate);
+                    let supply: i128 = env
+                        .storage()
+                        .persistent()
+                        .get(&DataKey::Supply(from.clone()))
+                        .unwrap_or(0);
+                    env.storage()
+                        .persistent()
+                        .set(&DataKey::Supply(from.clone()), &(supply - underlying_units));
+                    tok.transfer(&pool_addr, &to, &req.amount);
+                } else {
+                    panic!("unsupported request type");
+                }
+            }
+        }
+
+        pub fn underlying_balance(env: Env, user: Address, _asset: Address) -> i128 {
+            scaled_balance(&env, &user)
+        }
+
+        /// Test-only: scale every supply up by `factor / WAD`, simulating
+        /// Blend's b_rate growth.
+        pub fn accrue(env: Env, factor: i128) {
+            let current = current_rate(&env);
+            let next = mul_div(current, factor, WAD);
+            env.storage().instance().set(&DataKey::Rate, &next);
+        }
+    }
+
+    fn current_rate(env: &Env) -> i128 {
+        env.storage().instance().get(&DataKey::Rate).unwrap_or(WAD)
+    }
+
+    fn scaled_balance(env: &Env, user: &Address) -> i128 {
+        let raw: i128 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Supply(user.clone()))
+            .unwrap_or(0);
+        mul_div(raw, current_rate(env), WAD)
+    }
+}
+
+fn blend_setup<'a>() -> Fixture<'a> {
+    let f = setup();
+    f.env.mock_all_auths_allowing_non_root_auth();
+    f
+}
+
+#[test]
+fn blend_mode_deposit_forwards_underlying_to_pool() {
+    let f = blend_setup();
+    let pool_id = f.env.register_contract(None, mock_blend::MockBlendPool);
+    f.adapter.set_blend_pool(&pool_id);
+    assert_eq!(f.adapter.blend_pool(), Some(pool_id.clone()));
+
+    let minted = f.adapter.deposit(&f.user_a, &1_000_000_000i128);
+    assert_eq!(minted, 1_000_000_000i128);
+    // Pool now holds the underlying, not the adapter.
+    assert_eq!(f.underlying_token.balance(&pool_id), 1_000_000_000i128);
+    assert_eq!(f.underlying_token.balance(&f.adapter_id), 0);
+    assert_eq!(f.adapter.underlying_value(), 1_000_000_000i128);
+}
+
+#[test]
+fn blend_mode_exchange_rate_grows_with_pool_accrual() {
+    let f = blend_setup();
+    let pool_id = f.env.register_contract(None, mock_blend::MockBlendPool);
+    let mock_pool = mock_blend::MockBlendPoolClient::new(&f.env, &pool_id);
+
+    f.adapter.set_blend_pool(&pool_id);
+    f.adapter.deposit(&f.user_a, &1_000_000_000i128);
+
+    // 10% yield accrual inside Blend
+    mock_pool.accrue(&1_100_000_000_000_000_000i128);
+
+    assert_eq!(f.adapter.underlying_value(), 1_100_000_000i128);
+    assert_eq!(
+        f.adapter.exchange_rate(),
+        1_100_000_000_000_000_000i128
+    );
+}
+
+#[test]
+fn blend_mode_redeem_pulls_underlying_back_to_user() {
+    let f = blend_setup();
+    let pool_id = f.env.register_contract(None, mock_blend::MockBlendPool);
+    let mock_pool = mock_blend::MockBlendPoolClient::new(&f.env, &pool_id);
+
+    f.adapter.set_blend_pool(&pool_id);
+    f.adapter.deposit(&f.user_a, &1_000_000_000i128);
+    mock_pool.accrue(&1_100_000_000_000_000_000i128); // 10% yield
+
+    let pre = f.underlying_token.balance(&f.user_a);
+    let returned = f.adapter.redeem(&f.user_a, &500_000_000i128);
+    // Pool value at time of redeem = 1.1e9; sy_amount * pool/supply = 5.5e8
+    assert_eq!(returned, 550_000_000i128);
+    assert_eq!(f.underlying_token.balance(&f.user_a), pre + returned);
+    assert_eq!(f.underlying_token.balance(&f.adapter_id), 0);
+}
