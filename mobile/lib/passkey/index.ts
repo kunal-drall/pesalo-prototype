@@ -1,4 +1,7 @@
-import { TransactionBuilder } from "@stellar/stellar-sdk/minimal";
+// Use the full @stellar/stellar-sdk (not /minimal) so the XDR types
+// match what lib/stellar/payments.ts emits. Mixing the two SDK variants
+// produces "unknown EnvelopeType" decoder errors at sign time.
+import { TransactionBuilder } from "@stellar/stellar-sdk";
 import { create as createPasskey, get as getPasskey } from "react-native-passkeys";
 import { PasskeyKit } from "passkey-kit";
 
