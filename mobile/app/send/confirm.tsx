@@ -17,23 +17,23 @@ import { Caption, Money } from "@/components/design/Text";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import { useTheme } from "@/lib/design/theme";
 import { useTransaction } from "@/hooks/useTransaction";
-import { buildAssetTransfer } from "@/lib/stellar/contracts";
+import { buildClassicPayment } from "@/lib/stellar/payments";
 import { SupportedAsset, SUPPORTED_ASSETS } from "@/lib/utils/constants";
 import { useAuthStore } from "@/stores/authStore";
 import { useWalletStore } from "@/stores/walletStore";
 
-/// Send — pick asset, type amount, paste recipient. The "auto-withdraws
-/// from earning balance" hint is honest: a send first calls auto_withdraw
-/// to redeem SY → underlying, then transfers the underlying to the
-/// recipient, all in one signed bundle.
+/// Send — pick asset, type amount, paste recipient. Submits a classic
+/// Stellar payment over Horizon, signed with the on-device key. Works
+/// for both the dev keypair and any future passkey smart-wallet whose
+/// underlying asset is held outside Soroban.
 export default function SendScreen() {
   const t = useTheme();
   const router = useRouter();
   const walletAddress = useAuthStore((s) => s.walletAddress);
-  const balances = useWalletStore((s) => s.balances);
+  const balances = useWalletStore((s) => s.balances) ?? [];
   const tx = useTransaction();
 
-  const [asset, setAsset] = useState<SupportedAsset>("USDC");
+  const [asset, setAsset] = useState<SupportedAsset>("XLM");
   const [amount, setAmount] = useState("");
   const [recipient, setRecipient] = useState("");
 
@@ -52,8 +52,15 @@ export default function SendScreen() {
 
   async function onSend() {
     if (!walletAddress || !validTarget || parsed <= 0 || insufficient) return;
-    await tx.run(() =>
-      buildAssetTransfer({ from: walletAddress, to: recipient.trim(), asset, amount }),
+    await tx.run(
+      () =>
+        buildClassicPayment({
+          from: walletAddress,
+          to: recipient.trim(),
+          asset,
+          amount,
+        }),
+      { mode: "classic" },
     );
   }
 
@@ -213,7 +220,7 @@ export default function SendScreen() {
                   letterSpacing: -0.1,
                 }}
               >
-                Auto-withdraws from earning balance · keeps earning until sent
+                Settles in ~5 seconds on Stellar testnet
               </Text>
             </View>
           </View>

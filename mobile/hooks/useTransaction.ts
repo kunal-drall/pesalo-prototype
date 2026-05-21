@@ -8,6 +8,7 @@ import {
   extractInvocationParts,
   submitSorobanCall,
 } from "@/lib/stellar/channels";
+import { submitClassicTx } from "@/lib/stellar/payments";
 import { useWalletStore } from "@/stores/walletStore";
 
 export type TxStatus =
@@ -22,6 +23,10 @@ export type TxStatus =
 type RunOptions = {
   /// Skip the network submission step. Useful for dry-run flows.
   skipSubmit?: boolean;
+  /// "soroban" routes through the OZ Channels relayer (smart-wallet
+  /// boost / auto-earn). "classic" submits a plain Stellar operation
+  /// straight to Horizon (Send + Swap from the dev keypair).
+  mode?: "soroban" | "classic";
 };
 
 /// Drives the full lifecycle of a Soroban transaction from the UI:
@@ -53,29 +58,38 @@ export function useTransaction() {
         }
 
         setStatus("submitting");
-        const parts = extractInvocationParts(signed, stellarClient.networkPassphrase);
-        const receipt = await submitSorobanCall(parts);
 
-        // Channels recognises read-only calls and skips submission. Any user
-        // action that reaches this hook is expected to mutate state, so a
-        // missing hash is treated as a protocol error.
-        if (!receipt.hash) {
-          throw new Error(
-            `Channels marked this transaction as ${receipt.status ?? "readonly"} — nothing was submitted on chain`,
-          );
-        }
-        setTxHash(receipt.hash);
+        let hash: string;
+        if (options.mode === "classic") {
+          // Horizon submission for classic Stellar ops (payments, swaps,
+          // change_trust). Horizon returns success / failure synchronously
+          // once the tx is included in a ledger.
+          const receipt = await submitClassicTx(signed);
+          hash = receipt.hash;
+          setTxHash(hash);
+          setStatus("confirming");
+        } else {
+          const parts = extractInvocationParts(signed, stellarClient.networkPassphrase);
+          const receipt = await submitSorobanCall(parts);
+          if (!receipt.hash) {
+            throw new Error(
+              `Channels marked this transaction as ${receipt.status ?? "readonly"} — nothing was submitted on chain`,
+            );
+          }
+          hash = receipt.hash;
+          setTxHash(hash);
 
-        setStatus("confirming");
-        const polled = await stellarClient.pollTransaction(receipt.hash);
-        if (polled.status === "failed") {
-          throw new Error("Transaction failed on chain");
+          setStatus("confirming");
+          const polled = await stellarClient.pollTransaction(hash);
+          if (polled.status === "failed") {
+            throw new Error("Transaction failed on chain");
+          }
         }
 
         setStatus("success");
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         await refresh();
-        return { hash: receipt.hash };
+        return { hash };
       } catch (caught) {
         const message =
           caught instanceof Error ? caught.message : "Something went wrong. Please try again.";

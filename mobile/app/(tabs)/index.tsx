@@ -227,7 +227,7 @@ export default function HomeScreen() {
         )}
       </View>
 
-      {/* Send / Receive */}
+      {/* Send / Receive / Swap */}
       <View
         style={{
           paddingHorizontal: 20,
@@ -245,6 +245,11 @@ export default function HomeScreen() {
           icon="arrow-down-left"
           label="Receive"
           onPress={() => router.push("/send/receive")}
+        />
+        <PillAction
+          icon="refresh"
+          label="Swap"
+          onPress={() => router.push("/swap")}
         />
       </View>
 
