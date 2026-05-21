@@ -38,12 +38,16 @@ export const useAuthStore = create<AuthState>((set) => ({
   async createAccount() {
     set({ isLoading: true, error: null });
     try {
-      const walletAddress = await passkey.createAccount();
-      set({ isAuthenticated: true, walletAddress, isLoading: false });
+      const { address } = await passkey.createAccount();
+      set({ isAuthenticated: true, walletAddress: address, isLoading: false });
       const wallet = useWalletStore.getState();
-      wallet.setAddress(walletAddress);
+      wallet.setAddress(address);
+      // Give Friendbot's funding tx a moment to land on Horizon before
+      // we ask for balances. We refresh again later anyway, so this is
+      // just to make the first paint show non-zero where possible.
+      await new Promise((r) => setTimeout(r, 1500));
       await wallet.refresh();
-      return walletAddress;
+      return address;
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not create account";
       set({ isLoading: false, error: message });
@@ -74,6 +78,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   async signOut() {
+    await passkey.signOut();
     set({ isAuthenticated: false, walletAddress: null });
     await useWalletStore.getState().clear();
   },

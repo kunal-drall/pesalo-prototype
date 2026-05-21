@@ -33,13 +33,23 @@ config.resolver.extraNodeModules = {
   path: require.resolve("path-browserify"),
 };
 
-// Intercept the broken `require("../../package.json")` inside
-// stellar-sdk v14.x's bindings/config.js (a packaging bug fixed in v15).
-// passkey-kit pins v14.x so we can't dedupe via package overrides without
-// breaking it.
+// Module-level redirects:
+// (1) `@openzeppelin/relayer-plugin-channels` re-exports both ./client
+//     (used by mobile) and ./plugin (server-side relayer code that
+//     pulls in the full Stellar SDK and crashes at module-load in RN).
+//     Redirect to a stub that only re-exports ./client.
+// (2) Stellar SDK v14.x's `bindings/config.js` does
+//     `require("../../package.json")` with a path that's wrong post-build
+//     (fixed in v15, but passkey-kit pins v14.x). Provide a tiny stub
+//     with the version field — that require is CLI-only and never hits
+//     at runtime.
+const ozRelayerStub = path.resolve(__dirname, "metro-stubs/oz-relayer-plugin-channels.js");
 const stellarPackageStub = path.resolve(__dirname, "metro-stubs/stellar-sdk-package.json.js");
 const previousResolveRequest = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (moduleName === "@openzeppelin/relayer-plugin-channels") {
+    return { type: "sourceFile", filePath: ozRelayerStub };
+  }
   if (
     moduleName === "../../package.json" &&
     context.originModulePath &&

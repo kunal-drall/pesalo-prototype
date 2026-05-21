@@ -9,9 +9,11 @@ import process from "process";
 
 // Install on every global the JS runtime might check. RN's Hermes engine
 // uses `globalThis`; some bundles look for `global` (Node) or `window`.
-const targets = [globalThis as unknown as Record<string, unknown>];
-// @ts-expect-error global is the React Native runtime alias
-if (typeof global !== "undefined" && global !== globalThis) targets.push(global);
+const targets: Record<string, unknown>[] = [globalThis as unknown as Record<string, unknown>];
+const maybeGlobal = (globalThis as { global?: unknown }).global;
+if (maybeGlobal && maybeGlobal !== globalThis) {
+  targets.push(maybeGlobal as Record<string, unknown>);
+}
 
 for (const t of targets) {
   if (!t.Buffer) t.Buffer = Buffer;

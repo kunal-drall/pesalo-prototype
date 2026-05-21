@@ -46,11 +46,12 @@ export default function HomeScreen() {
   /// Weighted-average APY across all auto-earning balances. Falls back to a
   /// flat 0% when we have no balance/rate data so the pill never lies.
   const weightedApy = useMemo(() => {
-    if (!rates || totalUsd <= 0) return 0;
+    const flexRates = rates?.flexRates ?? [];
+    if (flexRates.length === 0 || totalUsd <= 0) return 0;
     let weighted = 0;
-    for (const b of balances) {
+    for (const b of balances ?? []) {
       if (b.usdValue <= 0) continue;
-      const r = autoEarnApyFor(b.asset, rates.flexRates);
+      const r = autoEarnApyFor(b.asset, flexRates);
       weighted += (b.usdValue / totalUsd) * r;
     }
     return weighted;
@@ -68,7 +69,9 @@ export default function HomeScreen() {
   /// already holds; among those, pick the one with the biggest delta vs
   /// the user's current auto-earn on that asset.
   const boostCtaItem = useMemo(() => {
-    if (!rates || rates.rates.length === 0) return null;
+    const fixedRates = rates?.rates ?? [];
+    const flexRates = rates?.flexRates ?? [];
+    if (fixedRates.length === 0) return null;
     type Candidate = {
       asset: SupportedAsset;
       boostRate: number;
@@ -77,10 +80,10 @@ export default function HomeScreen() {
       market: string;
       holds: boolean;
     };
-    const candidates: Candidate[] = rates.rates.map((r) => ({
+    const candidates: Candidate[] = fixedRates.map((r) => ({
       asset: r.asset,
       boostRate: r.apy,
-      autoEarn: autoEarnApyFor(r.asset, rates.flexRates),
+      autoEarn: autoEarnApyFor(r.asset, flexRates),
       days: r.days,
       market: r.market,
       holds: balanceFor(balances, r.asset).usdValue > 0,
@@ -92,7 +95,7 @@ export default function HomeScreen() {
     return ranked[0] ?? null;
   }, [rates, balances]);
 
-  const boostedPositions = positions.filter((p) => p.type === "fixed");
+  const boostedPositions = (positions ?? []).filter((p) => p.type === "fixed");
 
   return (
     <Screen
@@ -115,8 +118,11 @@ export default function HomeScreen() {
           alignItems: "center",
         }}
       >
-        <View
-          style={{
+        <Pressable
+          onPress={() => router.push("/settings")}
+          accessibilityRole="button"
+          accessibilityLabel="Open settings"
+          style={({ pressed }) => ({
             width: 36,
             height: 36,
             borderRadius: 18,
@@ -125,7 +131,8 @@ export default function HomeScreen() {
             borderColor: t.border,
             alignItems: "center",
             justifyContent: "center",
-          }}
+            opacity: pressed ? 0.7 : 1,
+          })}
         >
           <Text
             style={{
@@ -138,7 +145,7 @@ export default function HomeScreen() {
           >
             {address ? address.slice(0, 2).toUpperCase() : "··"}
           </Text>
-        </View>
+        </Pressable>
         <Pressable
           onPress={() => router.push("/(tabs)/activity")}
           style={({ pressed }) => ({
@@ -248,7 +255,7 @@ export default function HomeScreen() {
         </Caption>
         {SUPPORTED_ASSETS.map((symbol, idx) => {
           const bal = balanceFor(balances, symbol);
-          const apy = rates ? autoEarnApyFor(symbol, rates.flexRates) : 0;
+          const apy = autoEarnApyFor(symbol, rates?.flexRates ?? []);
           const isLast = idx === SUPPORTED_ASSETS.length - 1;
           return (
             <AssetRow

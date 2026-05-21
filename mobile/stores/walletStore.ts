@@ -94,8 +94,16 @@ export const useWalletStore = create<WalletState>((set, get) => ({
 
       const rates = ratesResult.status === "fulfilled" ? ratesResult.value : get().rates;
       const prices = pricesResult.status === "fulfilled" ? pricesResult.value : get().prices;
+      // Backend may return `fixed` or `flex` as undefined when no
+      // positions of that type exist. Default-coalesce so we don't
+      // explode the whole refresh just to surface "0 positions".
       const positions =
-        positionsResult.status === "fulfilled" ? positionsResult.value.fixed.concat(positionsResult.value.flex) : get().positions;
+        positionsResult.status === "fulfilled"
+          ? [
+              ...(positionsResult.value?.fixed ?? []),
+              ...(positionsResult.value?.flex ?? []),
+            ]
+          : get().positions;
 
       const balances = mergeBalances(
         horizonBalances.status === "fulfilled" ? horizonBalances.value : get().balances,

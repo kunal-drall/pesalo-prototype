@@ -15,7 +15,9 @@ import { useTheme } from "@/lib/design/theme";
 export default function WelcomeScreen() {
   const t = useTheme();
   const router = useRouter();
-  const { fixed, flex } = useRates();
+  const rates = useRates();
+  const flex = rates.flex ?? [];
+  const fixed = rates.fixed ?? [];
 
   /// Pick representative rates from real markets. We highlight USDC since
   /// it's the most likely first deposit; if USDC isn't available we fall
@@ -99,7 +101,14 @@ export default function WelcomeScreen() {
         </PrimaryButton>
         <View style={{ height: 4 }} />
         <Pressable
-          onPress={() => router.push("/(tabs)")}
+          onPress={async () => {
+            // "I already have an account" uses the existing on-device
+            // keys (passkey credential or stored dev keypair) to log in.
+            // The auth gate in root layout routes us into /(tabs) when
+            // a wallet address is found.
+            const { useAuthStore } = await import("@/stores/authStore");
+            await useAuthStore.getState().login();
+          }}
           style={({ pressed }) => ({
             height: 52,
             alignItems: "center",

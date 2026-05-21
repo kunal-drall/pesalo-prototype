@@ -16,9 +16,12 @@ export function useRates() {
       try {
         const payload = await fetchRates();
         if (!active) return;
-        setFixed(payload.rates);
-        setFlex(payload.flexRates);
-        setUpdatedAt(payload.updatedAt);
+        // Backend may return either field as undefined when no markets
+        // are open. Coalesce to [] so consumers can call .find / .map
+        // without a guard.
+        setFixed(payload?.rates ?? []);
+        setFlex(payload?.flexRates ?? []);
+        setUpdatedAt(payload?.updatedAt ?? null);
         setError(null);
       } catch (err) {
         if (!active) return;
