@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { fetchActivity } from "@/lib/api/activity";
+import { fetchActivityFromHorizon } from "@/lib/stellar/horizonActivity";
 import { ActivityEvent } from "@/lib/stellar/types";
 
-/// Fetches and exposes the user's activity feed from `/v1/activity/:addr`.
-/// Returns a `refresh` callback so the Activity screen can power a
-/// pull-to-refresh.
+/// Loads the user's activity feed straight from Horizon's
+/// /accounts/:id/operations endpoint. Reads work without a backend, so
+/// the Activity tab survives the indexer being down.
 export function useActivity(address: string | null) {
   const [events, setEvents] = useState<ActivityEvent[]>([]);
   const [loading, setLoading] = useState(false);
@@ -19,8 +19,8 @@ export function useActivity(address: string | null) {
     }
     setLoading(true);
     try {
-      const payload = await fetchActivity(address);
-      setEvents(payload.events);
+      const fresh = await fetchActivityFromHorizon(address);
+      setEvents(fresh);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load activity");
