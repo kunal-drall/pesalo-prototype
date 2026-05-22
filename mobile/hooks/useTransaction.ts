@@ -1,3 +1,4 @@
+import type { Transaction } from "@stellar/stellar-sdk";
 import * as Haptics from "expo-haptics";
 import { useCallback, useState } from "react";
 
@@ -8,7 +9,7 @@ import {
   extractInvocationParts,
   submitSorobanCall,
 } from "@/lib/stellar/channels";
-import { submitClassicTx } from "@/lib/stellar/payments";
+import { signAndSubmitClassic } from "@/lib/stellar/payments";
 import { useWalletStore } from "@/stores/walletStore";
 
 export type TxStatus =
@@ -23,16 +24,11 @@ export type TxStatus =
 type RunOptions = {
   /// Skip the network submission step. Useful for dry-run flows.
   skipSubmit?: boolean;
-  /// "soroban" routes through the OZ Channels relayer (smart-wallet
-  /// boost / auto-earn). "classic" submits a plain Stellar operation
-  /// straight to Horizon (Send + Swap from the dev keypair).
-  mode?: "soroban" | "classic";
 };
 
-/// Drives the full lifecycle of a Soroban transaction from the UI:
-///   build → passkey sign → extract (func, auth) → OZ Channels submit → poll
-/// Refreshes the wallet store on success and emits haptic feedback on the
-/// terminal states.
+/// Drives the full lifecycle of a Soroban contract transaction from
+/// the UI: build → passkey sign → OZ Channels submit → poll. Use
+/// `runClassic` for plain Stellar operations (Send / Swap / trustline).
 export function useTransaction() {
   const refresh = useWalletStore((s) => s.refresh);
   const [status, setStatus] = useState<TxStatus>("idle");
@@ -58,32 +54,20 @@ export function useTransaction() {
         }
 
         setStatus("submitting");
+        const parts = extractInvocationParts(signed, stellarClient.networkPassphrase);
+        const receipt = await submitSorobanCall(parts);
+        if (!receipt.hash) {
+          throw new Error(
+            `Channels marked this transaction as ${receipt.status ?? "readonly"} — nothing was submitted on chain`,
+          );
+        }
+        const hash = receipt.hash;
+        setTxHash(hash);
 
-        let hash: string;
-        if (options.mode === "classic") {
-          // Horizon submission for classic Stellar ops (payments, swaps,
-          // change_trust). Horizon returns success / failure synchronously
-          // once the tx is included in a ledger.
-          const receipt = await submitClassicTx(signed);
-          hash = receipt.hash;
-          setTxHash(hash);
-          setStatus("confirming");
-        } else {
-          const parts = extractInvocationParts(signed, stellarClient.networkPassphrase);
-          const receipt = await submitSorobanCall(parts);
-          if (!receipt.hash) {
-            throw new Error(
-              `Channels marked this transaction as ${receipt.status ?? "readonly"} — nothing was submitted on chain`,
-            );
-          }
-          hash = receipt.hash;
-          setTxHash(hash);
-
-          setStatus("confirming");
-          const polled = await stellarClient.pollTransaction(hash);
-          if (polled.status === "failed") {
-            throw new Error("Transaction failed on chain");
-          }
+        setStatus("confirming");
+        const polled = await stellarClient.pollTransaction(hash);
+        if (polled.status === "failed") {
+          throw new Error("Transaction failed on chain");
         }
 
         setStatus("success");
@@ -103,11 +87,52 @@ export function useTransaction() {
     [refresh],
   );
 
+  /// Classic Stellar tx flow: caller provides a builder that returns a
+  /// fully-formed Transaction object, we sign it with the on-device dev
+  /// keypair, and submit straight to Horizon. The Transaction never
+  /// crosses an XDR boundary, which dodges the "unknown EnvelopeType"
+  /// failure caused by multiple @stellar/stellar-base copies in
+  /// node_modules.
+  const runClassic = useCallback(
+    async (build: () => Promise<Transaction>) => {
+      setStatus("building");
+      setError(null);
+      setTxHash(null);
+
+      try {
+        const tx = await build();
+
+        setStatus("signing");
+        // `signAndSubmitClassic` does both — but we emit the lifecycle
+        // events so the UI overlay shows expected stages.
+        setStatus("submitting");
+        const receipt = await signAndSubmitClassic(tx);
+        const hash = receipt.hash;
+        setTxHash(hash);
+        setStatus("confirming");
+
+        setStatus("success");
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        await refresh();
+        return { hash };
+      } catch (caught) {
+        const message =
+          caught instanceof Error ? caught.message : "Something went wrong. Please try again.";
+        setStatus("error");
+        setError(message);
+        reportError(caught, { phase: "useTransaction.classic" });
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        return { hash: null, error: message };
+      }
+    },
+    [refresh],
+  );
+
   const reset = useCallback(() => {
     setStatus("idle");
     setError(null);
     setTxHash(null);
   }, []);
 
-  return { status, error, txHash, run, reset };
+  return { status, error, txHash, run, runClassic, reset };
 }

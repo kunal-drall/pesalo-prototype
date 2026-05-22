@@ -52,15 +52,13 @@ export default function SendScreen() {
 
   async function onSend() {
     if (!walletAddress || !validTarget || parsed <= 0 || insufficient) return;
-    await tx.run(
-      () =>
-        buildClassicPayment({
-          from: walletAddress,
-          to: recipient.trim(),
-          asset,
-          amount,
-        }),
-      { mode: "classic" },
+    await tx.runClassic(() =>
+      buildClassicPayment({
+        from: walletAddress,
+        to: recipient.trim(),
+        asset,
+        amount,
+      }),
     );
   }
 

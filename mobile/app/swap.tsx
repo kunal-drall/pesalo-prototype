@@ -143,25 +143,22 @@ export default function SwapScreen() {
     // account doesn't trust yet. Two signed txs, but we surface them as
     // one user gesture.
     if (trustlineMissing && destAsset !== "XLM") {
-      const result = await tx.run(
-        () => buildAddTrustline(walletAddress, destAsset),
-        { mode: "classic" },
+      const result = await tx.runClassic(() =>
+        buildAddTrustline(walletAddress, destAsset),
       );
       if (!result.hash) return;
       setTrustlineMissing(false);
     }
 
-    await tx.run(
-      () =>
-        buildSwap({
-          source: walletAddress,
-          sendAsset,
-          sendAmount,
-          destAsset,
-          minDestAmount: minDest,
-          path: path.path,
-        }),
-      { mode: "classic" },
+    await tx.runClassic(() =>
+      buildSwap({
+        source: walletAddress,
+        sendAsset,
+        sendAmount,
+        destAsset,
+        minDestAmount: minDest,
+        path: path.path,
+      }),
     );
   }
 
