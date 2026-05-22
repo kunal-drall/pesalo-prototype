@@ -1,0 +1,55 @@
+---
+title: Boost (PT / YT)
+sidebar_position: 3
+---
+
+# Boost — Splitter + Yield-Market
+
+Boost is yield tokenization. The Splitter takes 1 SY (auto-earning) and breaks it into:
+
+- **1 PT** (Principal Token) — redeemable for 1 unit of the underlying at maturity. No yield accrued on its own.
+- **1 YT** (Yield Token) — claims the streaming yield until maturity, then dies.
+
+`PT + YT = SY` is the conservation law. The user buys "fixed rate" exposure by **selling YT into the Yield-Market AMM** at boost time, locking the implied rate.
+
+## What happens when a user calls `Router.boost(...)`
+
+1. **Transfer underlying** from user into Router.
+2. **Auto-deposit** into the SY adapter → Router now holds SY.
+3. **Split** the SY → Router now holds PT + YT.
+4. **Sell YT** into the Yield-Market AMM. The AMM pays the user back SY in exchange.
+5. **Hold PT** on behalf of the user. The user's position = `(PT balance, maturity)`.
+
+The user's effective rate is fixed at the price the AMM gave for the YT — which is the **implied yield to maturity** baked into the AMM curve at the moment of the trade.
+
+## Maturity
+
+At maturity, `redeem_boost(user, asset, pt_amount)`:
+
+1. Burns the PT.
+2. Redeems the equivalent SY from the Splitter (Splitter's invariant: at maturity, 1 PT == 1 SY).
+3. Calls `auto_withdraw` if the user wanted underlying, OR returns SY so the position seamlessly resumes auto-earn.
+
+No dead period. No manual re-deposit. The user just sees their balance back in auto-earn.
+
+## Unboost (early exit)
+
+`unboost(user, asset, pt_amount)`:
+
+1. Sells PT into the Yield-Market AMM.
+2. Receives SY back.
+3. Returns SY to the user (still auto-earning).
+
+The price the AMM gives may be worse than the locked rate — that's the cost of early exit. The mobile UI explains this in plain English before submit.
+
+## Auth pre-declarations
+
+Like `auto_deposit`, the Router calls `env.authorize_as_current_contract` to pre-declare nested sub-invocations (SY transfer, splitter mint, AMM swap). All the user signs is the outer `boost` envelope.
+
+## Markets
+
+| Asset | Yield-Market contract | Splitter |
+|-------|------------------------|----------|
+| USDC | `CBTVKJUEU42FVIWGVW5HCTQKLGFVAPZE72BGBOWLP2RNFJE6YO5PLSEL` | `CC54AH2NOPVUTE3QZ3GRHVIRXTMZNFHDLMCKZ4ZIOFD26V2QP3Q6BREV` |
+| EURC | `CBD67GLBWKQBBZMKC7BOK4Z53AAZWBSCQYC2H467RS4DDEGULMZV362Y` | `CAIPTYVRCB2HCG7QJ675FXN5E6ZL452AKQ3HJLVGGEBFA4JOECDSEPXC` |
+| XLM | — (XLM doesn't have a fixed-rate market today) | — |

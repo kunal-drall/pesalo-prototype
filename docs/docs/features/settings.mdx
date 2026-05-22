@@ -1,0 +1,34 @@
+---
+title: Settings
+sidebar_position: 8
+---
+
+# Settings
+
+Tap the **avatar circle** in the top-left of Home (your address initials) to open Settings.
+
+## Wallet card
+
+The wallet card shows:
+
+- Your full Stellar address.
+- **Copy address** — pastes the address into your clipboard with a haptic confirmation.
+- **Friendbot refill** — re-runs the testnet faucet against your address. Useful if you've spent down or need extra XLM for swap fees.
+
+The status line under the buttons tells you whether the refill landed, was rejected, or whether the account was already funded.
+
+## About
+
+- **Security** → device-key + passkey status, where the key lives (Secure Enclave on iOS, Android Keystore).
+- **About Pesalo** → version, contact email, links to the landing site.
+
+## Sign out
+
+The **Sign out** button:
+
+1. Wipes the passkey credential ID from secure storage.
+2. Wipes the dev keypair secret from secure storage.
+3. Clears the cached wallet state in Zustand.
+4. Replaces the navigation stack to `/welcome` — you'll have to create a new account to get back in.
+
+There's no recovery flow. Pesalo never sees your key on a server, so signing out is the same as discarding the wallet. On testnet that's fine because you can Friendbot a new one. **On mainnet, signing out without backing up the underlying account = funds lost.**

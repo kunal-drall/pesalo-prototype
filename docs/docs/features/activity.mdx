@@ -1,0 +1,43 @@
+---
+title: Activity
+sidebar_position: 7
+---
+
+# Activity
+
+The **Activity** tab shows your account's transaction history pulled live from Horizon. There's no indexer in the path — Pesalo reads `/accounts/:id/operations` directly and translates the records into displayable events.
+
+## Time buckets
+
+The feed groups events into:
+
+- **Today** — anything since midnight local time.
+- **Yesterday** — single day prior.
+- **This week** — last 7 days excluding today/yesterday.
+- **Earlier** — older.
+
+Within each bucket, newest first.
+
+## Event types
+
+| Kind | Source Horizon op | What it looks like |
+|------|--------------------|---------------------|
+| Received | `create_account` (Friendbot funding) or `payment` to you | Green amount, "Received · auto-earning" |
+| Sent | `payment` from you | Plain amount, "Sent to G…ABC" |
+| Swap leg (out) | `path_payment_strict_send` where you're the source | Plain amount, "Sent" |
+| Swap leg (in) | `path_payment_strict_send` where you're the dest | Green amount, "Received" |
+| Boost / Auto-deposit | Soroban contract events (smart wallet only) | Gold / green, kind-specific copy |
+
+A swap shows up as **two rows** in the same transaction — one for the source leg and one for the destination leg — so you can see exactly what moved.
+
+## Filter chips
+
+The chip row filters by asset: `All` / `USDC` / `EURC` / `XLM`. The match is on the event's primary asset; multi-asset swap rows appear under whichever asset that leg involved.
+
+## Refresh
+
+Pull-to-refresh re-queries Horizon. There's no background polling — the list reflects the moment you opened the tab.
+
+## What about Boost / Auto-Earn events?
+
+Those flow through the Router smart contract and only appear on passkey-bound smart-wallet accounts. They land in the same `/operations` feed as `invoke_host_function` records, which the current parser doesn't decode. Surfacing them requires a small extension to [`lib/stellar/horizonActivity.ts`](https://github.com/kunal-drall/pesalo-prototype/blob/master/mobile/lib/stellar/horizonActivity.ts) — see the [Developer / Handoff](/developer/handoff) punch list.

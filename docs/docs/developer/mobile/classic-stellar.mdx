@@ -1,0 +1,119 @@
+---
+title: Classic Stellar (Send / Swap)
+sidebar_position: 3
+---
+
+# Classic Stellar flow
+
+Send + Swap + trustline-add use plain Stellar operations (not Soroban). They live in [`mobile/lib/stellar/payments.ts`](https://github.com/kunal-drall/pesalo-prototype/blob/master/mobile/lib/stellar/payments.ts) and the matching hook flow in [`mobile/hooks/useTransaction.ts`](https://github.com/kunal-drall/pesalo-prototype/blob/master/mobile/hooks/useTransaction.ts).
+
+## The two paths in `useTransaction`
+
+```ts
+const tx = useTransaction();
+
+await tx.run(() => buildBoost(...));     // Soroban → Channels relayer
+await tx.runClassic(() => buildSwap(..)); // Classic → Horizon
+```
+
+`run` is the original Soroban flow: build → passkey sign → OZ Channels relayer → poll Soroban RPC for finality.
+
+`runClassic` keeps the `Transaction` object in-module and never round-trips it through XDR. **This is crucial** — we have five different `@stellar/stellar-base` versions in `node_modules` (top-level 15.0.0 + four nested 14.1.0 copies) and the XDR enum tags can differ between them. Round-tripping a Transaction through a base64 string and back is exactly the dance that triggers `XDR Read Error: unknown EnvelopeType member`.
+
+## The shape of `signAndSubmitClassic`
+
+```ts
+export async function signAndSubmitClassic(tx: Transaction): Promise<{ hash: string; ledger: number }> {
+  const kp = await readDevKeypair();
+  if (!kp) throw new Error("No on-device keypair.");
+  tx.sign(kp);
+
+  const envelopeBytes = tx.toEnvelope().toXDR() as unknown as Uint8Array;
+  const xdr = bytesToBase64(envelopeBytes);  // see below
+
+  const res = await fetch(`${DEFAULT_HORIZON_URL}/transactions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: `tx=${encodeURIComponent(xdr)}`,
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error(describeHorizonError({ response: { data: body } }));
+  return { hash: body.hash, ledger: body.ledger };
+}
+```
+
+## The base64 trap
+
+This was the single most painful bug to debug. In Node:
+
+```js
+Transaction.toXDR()  // → "AAAAAgAAAAAGMM..." (base64 string)
+```
+
+In our RN bundle:
+
+```js
+Transaction.toXDR()  // → returns a *string* whose contents are "0,0,0,2,0,0,..."
+```
+
+That's the comma-separated-decimal-byte representation. It happens because:
+
+1. Internally the SDK calls `bytes.toString("base64")` expecting `bytes` to be a Node `Buffer`.
+2. Our npm `buffer` polyfill in `metro.config.js` returns plain `Uint8Array`s.
+3. `Uint8Array.prototype.toString()` ignores its argument and falls through to `Array.prototype.toString()`, which prints `"0,0,0,2,..."`.
+
+Fix: bypass the broken Buffer chain by base64-encoding the bytes ourselves via Hermes' native `btoa`:
+
+```ts
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+    binary += String.fromCharCode.apply(null, Array.from(chunk));
+  }
+  return globalThis.btoa(binary);
+}
+```
+
+This is independent of any module-level Buffer polyfill, runs on every RN/Hermes runtime, and works.
+
+## Error translation
+
+`describeHorizonError(...)` pulls the `extras.result_codes` from Horizon's 400 body and maps the common ones to plain-English copy:
+
+```ts
+op_underfunded         → "Not enough funds for this transaction."
+op_no_trust            → "The destination asset isn't trusted yet — add a trustline first."
+op_no_destination      → "The destination account doesn't exist on testnet yet."
+op_under_dest_min      → "Price moved against you past the slippage limit. Try again."
+op_too_few_offers      → "Not enough DEX liquidity for this swap right now."
+op_low_reserve         → "Not enough XLM to satisfy the base reserve. Top up via Friendbot."
+tx_bad_seq             → "Transaction sequence got out of date. Try again."
+tx_insufficient_balance → "Not enough XLM to pay the fee."
+```
+
+The full table is in `describeHorizonError()` in `lib/stellar/payments.ts`.
+
+## Path finding
+
+For swaps we call Horizon's `/paths/strict-send` endpoint and pick the best route:
+
+```ts
+const records = await horizon.strictSendPaths(send, sendAmount, [dest]).call();
+const best = records.records[0];
+```
+
+`records.records` is sorted by `destination_amount` descending — the first record is the best price. If Horizon returns 0 records there's no liquidity (this is the case for testnet EURC; see [Limitations](/features/limitations)).
+
+## Auto-trustline
+
+The Swap screen runs a `change_trust` transaction BEFORE the path-payment when the destination asset isn't yet trusted by the account. Two signed transactions, presented to the user as a single "Swap XLM for USDC" action:
+
+```ts
+if (trustlineMissing && destAsset !== "XLM") {
+  const result = await tx.runClassic(() => buildAddTrustline(walletAddress, destAsset));
+  if (!result.hash) return;
+}
+await tx.runClassic(() => buildSwap({ ... }));
+```

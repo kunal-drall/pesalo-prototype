@@ -1,0 +1,34 @@
+---
+title: Swap
+sidebar_position: 5
+---
+
+# Swap
+
+The **Swap** tab converts between XLM, USDC, and EURC using the live Stellar testnet DEX order book. The rate you see is whatever the network's market makers are quoting — not an oracle, not a CEX feed.
+
+## How a swap runs
+
+1. You type an amount in the **You pay** panel.
+2. Pesalo debounces ~350 ms and asks Horizon for the best `strict-send` path from your source asset to the destination asset. Horizon returns the best `destination_amount` across all available paths (direct or via intermediate hops).
+3. The **You receive** panel fills with that amount, the **Rate** line shows `1 SRC ≈ X DST`.
+4. We apply a **1% slippage floor** to `destMin` so the order doesn't fail under churn.
+5. On Swap, we build a `pathPaymentStrictSend` op, sign it, and POST to Horizon.
+
+## Auto-trustline
+
+Stellar requires a **trustline** for any non-native asset before an account can hold it. If you swap XLM → USDC and your account doesn't trust USDC yet, Pesalo runs a `change_trust` op first, then the swap, in the same user action. You'll see two signed transactions in the loading overlay, then a single success.
+
+## Quick-percent chips
+
+The **You pay** panel has `25%` / `50%` / `MAX` chips that prefill your current balance share. MAX uses the full free balance — be aware that the 2 XLM reserve floor still applies if you're swapping native XLM out, so a true 100% will get rejected with `op_underfunded`.
+
+## Common failures
+
+- *"No swap route available right now."* — Horizon's path-finder couldn't get from source to destination at this size. Try a smaller amount, the other direction, or a different pair.
+- *"Price moved against you past the slippage limit. Try again."* — order book moved more than 1% during build. The rate updates on the next keystroke.
+- *"Stellar rejected the transaction (op_too_few_offers)."* — not enough cumulative liquidity in the path. Use a smaller amount.
+
+## EURC liquidity caveat
+
+XLM ↔ EURC swaps frequently return "No swap route available" on testnet because **Circle's testnet EURC issuer (`GB3Q6QDZYTHWT7E5PVS3W7FUT5GVAFC5KSZFFLPU25GO7VTC3NM2ZTVO`) has essentially zero DEX liquidity**. That's a real testnet ecosystem state, not a bug. Mainnet EURC books are deep. See [Limitations](/features/limitations).

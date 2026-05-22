@@ -1,0 +1,223 @@
+/**
+ * Pesalo brand theme for Docusaurus.
+ *
+ * Color tokens mirror mobile/lib/design/theme.ts so the docs feel like a
+ * natural extension of the app. The pill-style nav toggle for
+ * Features / Developer is implemented via .navbar__item--pill rules at
+ * the bottom of this file.
+ */
+
+:root {
+  /* Light theme — matches mobile LIGHT theme */
+  --pesalo-bg0: #f7f8fa;
+  --pesalo-bg1: #ffffff;
+  --pesalo-bg2: #f1f4f8;
+  --pesalo-bg3: #e2e8f0;
+  --pesalo-fg: #0f172a;
+  --pesalo-fg2: #475569;
+  --pesalo-fg3: #94a3b8;
+  --pesalo-green: #15915c;
+  --pesalo-green-dark: #0f6e45;
+  --pesalo-gold: #b8830d;
+  --pesalo-gold-soft: rgba(184, 131, 13, 0.12);
+  --pesalo-border: #e5e9ef;
+
+  --ifm-color-primary: var(--pesalo-green);
+  --ifm-color-primary-dark: #138053;
+  --ifm-color-primary-darker: #117548;
+  --ifm-color-primary-darkest: #0e633c;
+  --ifm-color-primary-light: #17a16a;
+  --ifm-color-primary-lighter: #1ab075;
+  --ifm-color-primary-lightest: #1bbe7e;
+  --ifm-code-font-size: 92%;
+  --docusaurus-highlighted-code-line-bg: rgba(21, 145, 92, 0.08);
+
+  --ifm-background-color: var(--pesalo-bg0);
+  --ifm-background-surface-color: var(--pesalo-bg1);
+  --ifm-font-color-base: var(--pesalo-fg);
+  --ifm-color-content: var(--pesalo-fg);
+  --ifm-color-content-secondary: var(--pesalo-fg2);
+  --ifm-navbar-background-color: var(--pesalo-bg1);
+  --ifm-footer-background-color: var(--pesalo-bg2);
+  --ifm-toc-border-color: var(--pesalo-border);
+  --ifm-hr-background-color: var(--pesalo-border);
+
+  --ifm-font-family-base: -apple-system, "SF Pro Text", "SF Pro Display",
+    "Inter", system-ui, sans-serif;
+  --ifm-font-family-monospace: "SF Mono", ui-monospace, Menlo, monospace;
+
+  --ifm-h1-font-size: 2.4rem;
+  --ifm-h2-font-size: 1.6rem;
+  --ifm-heading-font-weight: 700;
+  --ifm-heading-color: var(--pesalo-fg);
+
+  --ifm-link-color: var(--pesalo-green);
+  --ifm-link-hover-color: var(--pesalo-green-dark);
+}
+
+[data-theme="dark"] {
+  /* Dark theme — matches mobile DARK theme */
+  --pesalo-bg0: #080b11;
+  --pesalo-bg1: #0e1219;
+  --pesalo-bg2: #151b24;
+  --pesalo-bg3: #1c232e;
+  --pesalo-fg: #f2f4f7;
+  --pesalo-fg2: #94a3b8;
+  --pesalo-fg3: #64748b;
+  --pesalo-green: #16a367;
+  --pesalo-green-dark: #0d7a4a;
+  --pesalo-gold: #f5b731;
+  --pesalo-gold-soft: rgba(245, 183, 49, 0.16);
+  --pesalo-border: #1e293b;
+
+  --ifm-color-primary: var(--pesalo-green);
+  --ifm-color-primary-dark: #13935c;
+  --ifm-color-primary-darker: #108a55;
+  --ifm-color-primary-darkest: #0d7a4a;
+  --ifm-color-primary-light: #19b274;
+  --ifm-color-primary-lighter: #1cbf7d;
+  --ifm-color-primary-lightest: #20d089;
+  --docusaurus-highlighted-code-line-bg: rgba(22, 163, 103, 0.14);
+
+  --ifm-background-color: var(--pesalo-bg0);
+  --ifm-background-surface-color: var(--pesalo-bg1);
+  --ifm-font-color-base: var(--pesalo-fg);
+  --ifm-color-content: var(--pesalo-fg);
+  --ifm-color-content-secondary: var(--pesalo-fg2);
+  --ifm-navbar-background-color: var(--pesalo-bg1);
+  --ifm-footer-background-color: var(--pesalo-bg0);
+  --ifm-toc-border-color: var(--pesalo-border);
+  --ifm-hr-background-color: var(--pesalo-border);
+}
+
+body {
+  font-family: var(--ifm-font-family-base);
+  letter-spacing: -0.1px;
+}
+
+.markdown h1,
+.markdown h2,
+.markdown h3 {
+  letter-spacing: -0.6px;
+}
+
+code {
+  background: var(--pesalo-bg2);
+  border: 1px solid var(--pesalo-border);
+  border-radius: 6px;
+  padding: 0.1em 0.4em;
+  font-size: 0.92em;
+}
+
+.theme-admonition {
+  border-radius: 12px;
+  border-left-width: 4px;
+}
+
+.theme-doc-sidebar-container {
+  border-right-color: var(--pesalo-border) !important;
+}
+.menu__link {
+  border-radius: 8px;
+}
+.menu__link--active {
+  background: var(--pesalo-bg2);
+  color: var(--pesalo-green);
+  font-weight: 600;
+}
+
+/* Pill-style nav toggle (Features / Developer) */
+.navbar__items {
+  align-items: center;
+}
+.navbar__item--pill {
+  display: inline-flex;
+  align-items: center;
+  height: 38px;
+  padding: 0 18px;
+  margin: 0 4px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: -0.2px;
+  color: var(--pesalo-fg2);
+  border: 1px solid transparent;
+  background: transparent;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.navbar__item--pill:hover {
+  background: var(--pesalo-bg2);
+  color: var(--pesalo-fg);
+  text-decoration: none;
+}
+.navbar__item--pill.navbar__link--active {
+  background: var(--pesalo-bg1);
+  color: var(--pesalo-fg);
+  border-color: var(--pesalo-green);
+  box-shadow: 0 1px 4px rgba(22, 163, 103, 0.18);
+}
+
+.navbar__items--left {
+  gap: 0;
+}
+
+/* "Get the app" right-side CTA: filled green chip */
+.navbar__items--right .navbar__item:not(.navbar__item--pill):first-of-type {
+  background: var(--pesalo-green);
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 13px;
+}
+.navbar__items--right .navbar__item:not(.navbar__item--pill):first-of-type:hover {
+  background: var(--pesalo-green-dark);
+  text-decoration: none;
+}
+
+.navbar__logo img {
+  height: 28px;
+}
+
+/* Landing/overview card grid */
+.pesalo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  margin: 24px 0;
+}
+.pesalo-card {
+  background: var(--pesalo-bg1);
+  border: 1px solid var(--pesalo-border);
+  border-radius: 16px;
+  padding: 18px 18px 16px;
+  text-decoration: none;
+  color: var(--pesalo-fg);
+  transition: border-color 0.2s ease, transform 0.2s ease;
+  display: block;
+}
+.pesalo-card:hover {
+  border-color: var(--pesalo-green);
+  transform: translateY(-1px);
+  text-decoration: none;
+}
+.pesalo-card h3 {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+}
+.pesalo-card p {
+  margin: 0;
+  color: var(--pesalo-fg2);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.footer {
+  border-top: 1px solid var(--pesalo-border);
+}
+.footer__copyright {
+  color: var(--pesalo-fg3);
+  font-size: 12px;
+}

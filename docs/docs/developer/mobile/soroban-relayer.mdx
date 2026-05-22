@@ -1,0 +1,55 @@
+---
+title: Soroban via OZ Channels
+sidebar_position: 4
+---
+
+# Soroban via OpenZeppelin Channels
+
+Boost and auto-earn flows go through Soroban contracts — and Soroban contract calls need fees paid in XLM. Pesalo's smart wallets don't necessarily hold XLM, so we sponsor every Soroban transaction via **OpenZeppelin Stellar Channels** (the production successor to SDF's deprecated Launchtube).
+
+## What Channels does
+
+Channels is a hosted relayer. The client:
+
+1. Builds a Soroban transaction.
+2. Has the user sign the transaction's auth payload via WebAuthn (the smart wallet's signer).
+3. POSTs the signed call to `channels.openzeppelin.com/testnet/v1/transactions` with the project's API key.
+4. The relayer wraps the call in a sponsoring fee-bump transaction, signs as the fee account, submits to Soroban RPC, returns the final hash.
+
+The user never needs to hold XLM. They never pay a fee. Onboarding is one-tap.
+
+## The integration
+
+[`mobile/lib/stellar/channels.ts`](https://github.com/kunal-drall/pesalo-prototype/blob/master/mobile/lib/stellar/channels.ts) handles two things:
+
+```ts
+export function extractInvocationParts(signedXdr: string, networkPassphrase: string): InvocationParts;
+export async function submitSorobanCall(parts: InvocationParts): Promise<{ hash?: string; status?: string }>;
+```
+
+`extractInvocationParts` pulls the host function + auth entries out of the signed Stellar Transaction envelope. Those two pieces are what Channels actually relays — the rest of the envelope (account, sequence, fee) is filled in by the relayer.
+
+`submitSorobanCall` POSTs to Channels with the API key bound to `mobile/.env.local`'s `EXPO_PUBLIC_CHANNELS_API_KEY`.
+
+## Why not submit directly to Soroban RPC?
+
+Two reasons:
+
+1. **Fees.** A smart wallet without XLM can't pay for its own Soroban submission. Channels' fee-bump pattern delegates the fee to a sponsor account the relayer controls.
+2. **Sequence management.** A relayer manages its own sequence numbers across concurrent requests. Submitting from the user's wallet directly would force the mobile client to track sequence races, which is finicky.
+
+## How `useTransaction.run` ties it together
+
+```ts
+const unsigned = await build();                                  // build via Soroban RPC simulation
+const signed = await signTransaction(unsigned);                  // passkey-kit WebAuthn sign
+const parts = extractInvocationParts(signed, networkPassphrase); // pull host function + auth
+const receipt = await submitSorobanCall(parts);                  // POST to Channels
+const polled = await stellarClient.pollTransaction(receipt.hash); // wait for finality
+```
+
+If Channels returns no hash it's because the relayer detected a read-only call (no state change) and skipped submission. The mobile UI treats that as a protocol error since every user action that reaches this path is expected to mutate state.
+
+## API key handling
+
+`EXPO_PUBLIC_CHANNELS_API_KEY` is included in the JS bundle, which means **every installed dev build ships the key**. For mainnet release this needs to proxy through the backend so the API key never lands on user devices. Tracked as a Priority 2 item on the [handoff](/developer/handoff).

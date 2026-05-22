@@ -1,0 +1,53 @@
+---
+title: Discover
+sidebar_position: 6
+---
+
+# Discover
+
+The **Discover** tab is a curated index of real Stellar dApps. Every entry is a live production URL and every icon is the dApp's own favicon — Pesalo doesn't draw synthetic glyphs.
+
+## The current registry
+
+| dApp | Category | URL |
+|------|----------|-----|
+| Blend | Lending | `mainnet.blend.capital` |
+| Aquarius | DEX | `aqua.network` |
+| Soroswap | DEX | `app.soroswap.finance` |
+| Phoenix | DEX | `app.phoenix-hub.io` |
+| StellarTerm | DEX | `stellarterm.com` |
+| DeFindex | DeFi | `defindex.io` |
+| FxDAO | DeFi | `app.fxdao.io` |
+| Allbridge Core | Bridge | `core.allbridge.io` |
+| LOBSTR | Wallet | `lobstr.co` |
+| Stellar Expert | Tools | `stellar.expert/explorer/public` |
+
+The source of truth lives in [`mobile/lib/discover/registry.ts`](https://github.com/kunal-drall/pesalo-prototype/blob/master/mobile/lib/discover/registry.ts). Adding a new dApp is one entry there + the next mobile build.
+
+## How icons work
+
+Each entry has a `brandDomain`. At render time the Discover row resolves the icon via Google's S2 favicon service:
+
+```
+https://www.google.com/s2/favicons?domain=<brandDomain>&sz=128
+```
+
+This pulls the actual favicon the dApp publishes. If the dApp ever drops their favicon, the row would show an empty image rather than a guessed glyph — we'd rather remove the entry than make one up.
+
+## The in-app browser
+
+Tap any dApp → it opens in a **react-native-webview** at the dApp's real URL. The browser chrome includes:
+
+- The dApp name in the nav bar.
+- A live URL bar (read-only, shows whichever page the WebView navigated to) with an HTTPS chip.
+- Back / forward / reload / close controls.
+
+You're hitting Stellar mainnet from inside this WebView — Pesalo doesn't relay or rewrite the traffic. Sign-in flows on each dApp work as if you'd opened them in Safari.
+
+## Why "real icons only"?
+
+Lots of wallet apps publish dApp directories with generic dollar / circle icons that have nothing to do with the brand. We chose the opposite policy because:
+
+- The icon is what users tap. A synthetic glyph is meaningless.
+- Real favicons make outdated entries obvious (an unmaintained site usually drops favicons before everything else).
+- We never want to imply a relationship with a dApp via lookalike branding.

@@ -1,0 +1,66 @@
+---
+title: Quirks & gotchas
+sidebar_position: 5
+---
+
+# Quirks & gotchas
+
+These are non-obvious things future contributors will trip over. Read this before you spend time debugging anything weird.
+
+## 1. The `buffer` polyfill returns plain `Uint8Array`s
+
+Our Metro config maps `buffer` → the npm `buffer` polyfill. Some code paths in the Stellar SDK assume `Buffer.from(bytes)` returns a proper Node Buffer with the `.toString("base64")` override. In our RN runtime it returns a plain `Uint8Array` whose `.toString()` falls through to `Array.prototype.toString` — producing `"0,0,0,2,..."` instead of base64.
+
+**Don't trust `Transaction.toXDR()` to return a base64 string.** Use the explicit `bytesToBase64()` helper in `lib/stellar/payments.ts` (which uses native `btoa`).
+
+## 2. Five copies of `@stellar/stellar-base` in node_modules
+
+```text
+node_modules/@stellar/stellar-base@15.0.0                                 (top-level, what `payments.ts` uses)
+node_modules/passkey-kit/node_modules/@stellar/stellar-base@14.1.0
+node_modules/sac-sdk/node_modules/@stellar/stellar-base@14.1.0
+node_modules/passkey-kit-sdk/node_modules/@stellar/stellar-base@14.1.0
+node_modules/@openzeppelin/relayer-plugin-channels/node_modules/@stellar/stellar-base@14.1.0
+```
+
+XDR enum tags can disagree across major versions. The fix is to keep each transaction's `Transaction` object inside a single module's runtime — never serialize-then-deserialize across module boundaries. `useTransaction.runClassic` does exactly this.
+
+## 3. `@openzeppelin/relayer-plugin-channels` plugin half crashes at module-load
+
+The package's index re-exports both `./client` (we use it) and `./plugin` (we don't, it's server-side relayer code). The plugin half pulls in heavy Node-only deps and dies with `Cannot read property 'slice' of undefined` during RN module load.
+
+We shim it at the Metro resolver level (`mobile/metro.config.js` + `mobile/metro-stubs/oz-relayer-plugin-channels.js`) so the import resolves to the client subpath only.
+
+## 4. Stellar SDK v14 has a `package.json` packaging bug
+
+`stellar-sdk@14.x`'s `lib/*/bindings/config.js` does `require("../../package.json")` with a path that's wrong post-build (fixed in v15). passkey-kit pins v14 so we can't dedupe.
+
+Metro intercepts the bad require in `metro.config.js` and redirects it to `mobile/metro-stubs/stellar-sdk-package.json.js`, which exports a stub `{ version: "14.6.1" }`. The bindings code that triggers the require is CLI-only and never hits at runtime.
+
+## 5. Polyfill ordering matters
+
+`index.js` (not `expo-router/entry`) is the app entry. It installs `crypto.getRandomValues`, `Buffer`, `process`, `URL` BEFORE expo-router scans the route filesystem. If you add a new route file that does `Keypair.random()` at module top-level and you don't go through `index.js`, your build will explode at cold boot.
+
+## 6. exFAT AppleDouble sidecars
+
+This repo lives on an exFAT external drive, which means macOS dumps `._*` sidecar files on every write. Expo Router used to pick them up as routes ("Route `./_._layout.tsx` is missing the required default export"). Fixed by:
+
+- Metro `blockList: [/(^|\/)\._.*/]` in `metro.config.js`.
+- `tsconfig.exclude: ["**/._*"]`.
+- `dot_clean -m .` at the repo root if they ever accumulate.
+
+The trade-off is that `dot_clean` doesn't fully prevent macOS from re-creating them — it just clears what's already there.
+
+## 7. Hermes vs JSC differences
+
+Pesalo runs on Hermes (RN's default). Hermes has native `btoa`/`atob`/`TextEncoder`/`TextDecoder` since iOS 17 / Android API 33+, so we don't need separate polyfills for those. If we ever support older devices or switch to JSC, that assumption breaks.
+
+## 8. EAS env vars don't include empty values
+
+`eas env:push --path .env.local` rejects empty-value lines. If you have `EXPO_PUBLIC_X=` in your local file you'll see:
+
+```text
+Variable value can not be empty
+```
+
+Strip them with `grep -vE '=$' .env.local > /tmp/clean-env` before push, OR just delete the empty lines from `.env.local`.

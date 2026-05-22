@@ -2,6 +2,8 @@
 
 Pesalo is a passkey-first Stellar savings wallet built with Expo Router + React Native + Zustand + the Soroban SDK. This document captures the current state of the app, what works end-to-end, and the punch list of what's left so a fresh contributor (human or agent) can pick up without context loss.
 
+> **Full web docs**: this file is the canonical README; for a navigable version with cross-links + code samples see [pesalo.fun/docs](https://pesalo.fun/docs) (Docusaurus, built from `docs/`).
+
 ---
 
 ## Stack snapshot
@@ -87,8 +89,17 @@ Pesalo is a passkey-first Stellar savings wallet built with Expo Router + React 
 - HTTPS lock chip + back/forward/reload/close controls.
 
 ### Activity (`app/(tabs)/activity.tsx`)
-- Pulls `/v1/activity/:addr` and groups by time bucket (Today / Yesterday / This week / Earlier).
+- Reads `/accounts/:id/operations` directly from Horizon (no backend dependency) — see `lib/stellar/horizonActivity.ts`.
+- Maps `create_account` (Friendbot funding), `payment`, and `path_payment_strict_*` records into our ActivityEvent shape.
+- Groups by time bucket (Today / Yesterday / This week / Earlier).
 - Filter chips by asset (All / USDC / EURC / XLM).
+- **Caveat**: Soroban contract events (boost / auto-deposit) come through as `invoke_host_function` records that this parser ignores today. Adding them is a Priority 1 follow-up.
+
+### Send / Receive / Swap (`app/send/*` + `app/swap.tsx`)
+- All three use classic Stellar payments — no Soroban, no Channels relayer. `Operation.payment`, `Operation.changeTrust`, `Operation.pathPaymentStrictSend` built in `lib/stellar/payments.ts`, signed in-module with the dev keypair, and submitted via plain `fetch` to Horizon.
+- The submit step base64-encodes the envelope manually via `bytesToBase64()` because `Transaction.toXDR()` doesn't return a real base64 string in our RN bundle — see [Mobile / Quirks #1 + #2 in the docs](https://pesalo.fun/docs/developer/mobile/quirks).
+- Swap auto-runs `change_trust` first when the destination asset isn't yet trusted.
+- Horizon errors are translated into plain-English copy via `describeHorizonError()`.
 
 ### Settings (`app/settings/index.tsx`)
 - Address card + copy + Friendbot refill.
@@ -119,13 +130,17 @@ Pesalo is a passkey-first Stellar savings wallet built with Expo Router + React 
    - Build a "Stellar Account Boost" variant of the Router that accepts plain Ed25519 auth, OR
    - Decide that boost is passkey-only and explicitly disable the CTA for dev accounts (currently it lights up but the call would fail).
 
-3. **Real USD prices for XLM / EURC**. The `/v1/prices` endpoint returns a single shape (`{USDC_USD, EURC_USD, XLM_USD}`). Confirm the backend is actually reading from a live oracle (e.g. CoinGecko, Reflector). The mobile UI silently zeroes the balance when prices are missing.
+3. **Backend offline**. `pesalo-api-production.up.railway.app` no longer resolves DNS. The mobile app has been re-pointed for Activity (now Horizon-direct), but `/v1/rates`, `/v1/prices`, `/v1/positions/:addr` still call the backend — so Auto-Earn APYs show 0%, USD totals on Home stay at $0 even with non-zero XLM balance, and the Boost tab shows the empty state. Options: re-deploy the Railway project (env vars in `backend/.env.example`), move to another Node host, or remove the backend entirely and read everything from Horizon / a public price oracle.
 
-4. **Activity hookup verification**. The Home → Activity tab pulls from `/v1/activity/:addr`. After Friendbot funding + a send, the activity feed should show the create-account + payment ops. Confirm backend parses Horizon operations into our `ActivityEvent` shape, not just Soroban events.
+4. **Real USD prices for XLM / EURC**. The `/v1/prices` endpoint returns a single shape (`{USDC_USD, EURC_USD, XLM_USD}`). Confirm the backend is actually reading from a live oracle (e.g. CoinGecko, Reflector). The mobile UI silently zeroes the balance when prices are missing.
 
-5. **Maturity flow**. `app/savings/maturity/[id].tsx` exists but needs to be wired to the Router's `redeem_boost` method when the position has fully matured. There's also an "Unboost early" CTA from the position detail screen that needs to call `unboost`.
+5. **EURC has near-zero testnet DEX liquidity**. Circle's testnet EURC issuer (`GB3Q6QDZYTHWT7E5PVS3W7FUT5GVAFC5KSZFFLPU25GO7VTC3NM2ZTVO`) has essentially no order book depth, so `findStrictSendPath(... destAsset: EURC)` returns empty. The Swap screen handles this gracefully ("No swap route available") but it means users can't actually trade into EURC on testnet. Either seed our own bilateral USDC/EURC offers from a side account, or pick a different testnet EURC issuer with active liquidity. Mainnet EURC is fine.
 
-6. **Error UX polish**. We currently throw raw errors into the LoadingOverlay and into red inline text. Replace with a friendly toast/snackbar and a retry button. Some errors (insufficient funds, no trustline, expired session) deserve dedicated copy.
+6. **Activity for Soroban events**. `lib/stellar/horizonActivity.ts` currently maps `payment`, `create_account`, and `path_payment_strict_*` records. Soroban contract events (boost, auto-deposit, unboost) come through as `invoke_host_function` records that the parser ignores. Add a branch to decode them into our ActivityEvent shape.
+
+7. **Maturity flow**. `app/savings/maturity/[id].tsx` exists but needs to be wired to the Router's `redeem_boost` method when the position has fully matured. There's also an "Unboost early" CTA from the position detail screen that needs to call `unboost`.
+
+8. **Error UX polish**. We currently throw raw errors into the LoadingOverlay and into red inline text. Replace with a friendly toast/snackbar and a retry button. Some errors (insufficient funds, no trustline, expired session) deserve dedicated copy.
 
 ### Priority 2 — production hardening
 
@@ -174,3 +189,5 @@ Currently the app uses:
 - **Stellar SDK package.json bug**: stellar-sdk v14.x's `lib/*/bindings/config.js` does `require("../../package.json")` with a path that's wrong post-build. We intercept with `metro-stubs/stellar-sdk-package.json.js`. v15 fixed this but passkey-kit pins v14, so we can't dedupe.
 - **SDK variant alignment**: lib/stellar/payments.ts uses `@stellar/stellar-sdk` (full); lib/passkey/index.ts now imports `TransactionBuilder` from the **same** `@stellar/stellar-sdk` (not `/minimal`). Mixing the two surfaces `XDR Read Error: unknown EnvelopeType`.
 - **Polyfill ordering**: anything that touches Stellar SDK at module-load must be reachable from `index.js` only AFTER its `require("expo-router/entry")` line. New code at the top of route files that does crypto / Buffer / URL ops at import time will crash on cold boot.
+- **Buffer polyfill is broken for base64**: `Transaction.toXDR()` in our RN bundle returns a string whose contents are `"0,0,0,2,..."` (the Uint8Array's `Array.prototype.toString` output), NOT base64 — because the npm `buffer` polyfill doesn't apply the Buffer prototype to its returned bytes. **Use `bytesToBase64()` from `lib/stellar/payments.ts` instead** (it calls Hermes' native `btoa`). This is the single most painful bug in the project's history; debugging it took ~10 build cycles.
+- **Docusaurus docs site**: lives in `docs/`, deploys to `pesalo.fun/docs` via a Next.js rewrite in `landing/next.config.ts`. To preview locally: `cd docs && npm install && npm start`. Build: `npm run build`.

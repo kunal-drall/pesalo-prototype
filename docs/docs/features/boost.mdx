@@ -1,0 +1,33 @@
+---
+title: Boost
+sidebar_position: 3
+---
+
+# Boost
+
+**Boost locks part of your balance for a fixed term and pays a higher, guaranteed rate** than the floating auto-earn APY. It's the same product idea as a CD or a fixed-term savings deposit, implemented on-chain via Stellar's yield protocols.
+
+## How it appears
+
+The **Boost** tab lists every open market — one card per asset / term combination. Each card shows:
+
+- The boost rate (e.g. `12.5% fixed`) in gold.
+- Your current auto-earn rate on that asset for comparison.
+- The term length in days and the maturity date.
+- A worked example sized to your actual balance: *"$500 boosted → earn $15.41 over 90 days"*.
+
+Tap a card to open **Confirm Boost**, type an amount, and sign.
+
+## The rate is real
+
+The boost APY isn't a marketing number — it's set by a Pendle-style logit-curve AMM that prices yield tokens (PT / YT) against the underlying. The number you see is the implied yield from the current AMM mid-price. See [Developer / Contracts / Yield Math](/developer/contracts/yield-math) for the model.
+
+## Early exit (unboost)
+
+You can sell a boost position back to the AMM at any time before maturity. The protocol calls this **unboost**. It returns your principal + any accrued earnings at the current market rate, which may be less than the rate you locked.
+
+After maturity, **redeem** routes the position back into auto-earn automatically — no dead period, no manual step.
+
+## Smart-wallet only (today)
+
+Boost calls the Router smart contract, which requires passkey-bound smart-wallet auth. The dev keypair fallback can't sign Soroban auth for the Router, so the Boost CTA on those accounts will fail at submit. See [Limitations](/features/limitations).

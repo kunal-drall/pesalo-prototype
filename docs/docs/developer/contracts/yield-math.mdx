@@ -1,0 +1,64 @@
+---
+title: Yield Math
+sidebar_position: 4
+---
+
+# Yield Math — the logit-curve AMM
+
+The Yield-Market is the AMM that prices PT against SY (Principal Token vs. yield-bearing token). Pesalo uses a **logit curve** — the same family Pendle introduced for yield trading. The shape concentrates liquidity around 1:1 (PT and SY are almost interchangeable for small trades) and naturally maps price ↔ implied APY.
+
+## The pool state
+
+A Yield-Market pool tracks two reserves:
+
+- `pt_reserve` — PT held by the pool.
+- `sy_reserve` — SY held by the pool.
+- `total_pt` — current total supply of PT (PT minted by the Splitter).
+- `maturity_ts` — Unix timestamp at which PT becomes 1:1 redeemable for SY.
+
+## The price function
+
+The pool's mid-price is computed from the **proportion** of PT in the pool:
+
+```text
+p = pt_reserve / (pt_reserve + sy_reserve)   // ∈ (0, 1)
+implied_rate = ln(p / (1 - p)) / years_to_maturity
+```
+
+This is the logit transform: `logit(p) = ln(p / (1-p))`. As `p → 0.5`, implied rate → 0. As `p → 1`, implied rate → +∞ (PT very cheap, AMM happy to sell it). As `p → 0`, implied rate → -∞.
+
+In practice the pool stays in a narrow band around p ≈ 0.5 + small.
+
+## The trade function
+
+Given the pool wants to maintain a target rate curve, swapping `dSY` for `dPT` works out to a fixed-point computation in [`yield-math`](https://github.com/kunal-drall/pesalo-prototype/tree/master/contracts/yield-math):
+
+```rust
+pub fn swap_sy_for_pt(
+    pool: &Pool,
+    sy_in: i128,        // amount of SY the user is supplying
+    time_to_maturity: i128,
+) -> SwapResult {
+    // 1. Solve the logit-curve invariant for the new pool state.
+    // 2. Return (pt_out, fee_in_sy).
+}
+```
+
+The library is pure (no Soroban state) so it's testable in isolation. There's a snapshot suite in `contracts/yield-market/test_snapshots/` that pins the exact `pt_out` for several `sy_in` × `years_left` × `pool_state` combinations.
+
+## Why logit specifically
+
+Three reasons:
+
+1. **Price → APY is just a logit/exp identity.** No iterative solve, no Brent's method. The boost UI can show "you'll lock 12.5% APY" in real time.
+2. **Liquidity concentrates near 1:1.** PT ≈ SY for small swaps, which matches real user behavior: most boosts are sized to small fractions of pool depth.
+3. **The curve has natural asymptotes** at `p = 0` and `p = 1`. The AMM can never run dry without the implied rate going to infinity, which trader sniping would arbitrage away first.
+
+## Fees
+
+A small swap fee (default 0.3% of input SY, configurable per pool at deploy time) is charged on every swap. Half goes to LPs, half is held as protocol revenue (no governance / payout flow yet — it just sits in the pool).
+
+## Open work
+
+- **Two-sided swap**: today PT is bought by selling YT (boost) or sold to redeem SY (unboost). A direct PT/SY swap is implemented but not surfaced in the mobile UI.
+- **LP UI**: liquidity is currently seeded by a script. The protocol supports `add_liquidity` / `remove_liquidity`; an LP screen would let users deposit SY + PT pairs and earn the fee share.

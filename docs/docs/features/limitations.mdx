@@ -1,0 +1,57 @@
+---
+title: Known limitations
+sidebar_position: 9
+---
+
+# Known limitations
+
+Pesalo is a testnet prototype. Some surfaces work end-to-end (Send, XLM↔USDC swap, Activity), others are placeholder until mainnet enrolment lands. This page collects the known gaps so users + contributors don't get surprised.
+
+## Passkey wallet creation falls back on simulators
+
+iOS Simulator doesn't reliably support WebAuthn, and our smart-wallet contract requires the Apple Developer associated-domains setup we don't have on dev hardware yet. When Pesalo can't create a passkey wallet:
+
+- It silently falls back to a random Stellar Ed25519 keypair stored in `expo-secure-store`.
+- The keypair address is a plain `G…` address, not the smart wallet `C…` contract address.
+- Friendbot funds the new account immediately.
+- The app boots into Home as normal.
+
+**What works on a dev keypair:** balances, Send, Swap (XLM ↔ USDC), Receive, Friendbot refills, Activity.
+
+**What doesn't:** Boost / Unboost / Auto-Earn deposits — those go through the Router smart contract which expects WebAuthn / passkey auth signatures. The Boost CTA still lights up on these accounts but submitting will fail.
+
+Production builds will only use the passkey path; the dev fallback exists so the rest of the app can be tested in CI / on simulators.
+
+## EURC has near-zero testnet liquidity
+
+Circle's testnet EURC issuer (`GB3Q6QDZYTHWT7E5PVS3W7FUT5GVAFC5KSZFFLPU25GO7VTC3NM2ZTVO`) has essentially no DEX offers, so XLM ↔ EURC and USDC ↔ EURC swap paths return empty from Horizon's path-finder.
+
+The Swap screen handles this gracefully — you'll see *"No swap route available right now"* and the button stays disabled. **Mainnet EURC books are deep**; this only affects testnet.
+
+If you need to test the EURC path on dev, you can either:
+
+1. Seed your own bilateral USDC/EURC orderbook offer from a separate account.
+2. Pick a third-party testnet EURC issuer with more activity (and update `TESTNET_EURC_ISSUER` in [`mobile/lib/stellar/payments.ts`](https://github.com/kunal-drall/pesalo-prototype/blob/master/mobile/lib/stellar/payments.ts)).
+
+## The Pesalo indexer is offline
+
+The Railway-hosted backend (`pesalo-api-production.up.railway.app`) doesn't resolve DNS at the moment. The mobile surfaces that depended on it have been re-pointed:
+
+- **Activity** → now reads `/accounts/:id/operations` from Horizon directly.
+- **Rates** / **Prices** / **Positions** → still call the backend. With it offline:
+  - Auto-Earn APYs show 0%.
+  - USD totals on Home stay at $0 even when you hold XLM (because the price feed is empty).
+  - The Boost tab shows the empty state.
+
+This is tracked as a Priority 1 item in [Developer / Handoff](/developer/handoff). The fix is to either redeploy the backend or move the remaining endpoints to direct Horizon / oracle calls.
+
+## No mainnet build yet
+
+Every endpoint, contract ID, issuer, and Friendbot reference is testnet-only. Flipping to mainnet requires:
+
+- Switching `STELLAR_TESTNET_PASSPHRASE` → `Networks.PUBLIC`.
+- Pointing Horizon + Soroban RPC at mainnet endpoints.
+- Re-deploying the Router and SY adapter contracts on Stellar mainnet.
+- Switching OZ Channels relayer to its mainnet endpoint + production API key.
+- Hosting the `apple-app-site-association` + `assetlinks.json` files on `pesalo.fun/.well-known/`.
+- Removing the dev keypair fallback in `lib/passkey/index.ts` for release builds.
