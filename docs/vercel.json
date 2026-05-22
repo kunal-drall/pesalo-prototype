@@ -1,8 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "npm run build",
-  "outputDirectory": "build",
+  "buildCommand": "npm run build && rm -rf public && mkdir -p public/docs && cp -R build/. public/docs/",
+  "outputDirectory": "public",
   "framework": null,
   "cleanUrls": true,
-  "trailingSlash": false
+  "trailingSlash": false,
+  "redirects": [
+    { "source": "/", "destination": "/docs", "permanent": false }
+  ]
 }
