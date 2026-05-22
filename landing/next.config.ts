@@ -9,7 +9,7 @@ import type { NextConfig } from "next";
 /// embed `/docs/...` paths. The build output ships those files at the
 /// root of the static deploy, so we strip the `/docs/` prefix on the
 /// way out: pesalo.fun/docs/features/overview → DOCS_ORIGIN/features/overview.
-const DOCS_ORIGIN = process.env.PESALO_DOCS_ORIGIN ?? "https://docs.moonight.fun";
+const DOCS_ORIGIN = process.env.PESALO_DOCS_ORIGIN ?? "https://pesalo-docs.vercel.app";
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
