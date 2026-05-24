@@ -1,0 +1,27 @@
+[workspace]
+members = [
+    "yield-math",
+    "blend-sy-adapter",
+    "splitter",
+    "yield-market",
+    "router",
+    "integration-tests",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/pesalo/pesalo"
+
+[workspace.dependencies]
+soroban-sdk = "21.7.6"
+yield-math = { path = "yield-math" }
+
+[profile.release]
+opt-level = "z"
+overflow-checks = true
+strip = "symbols"
+panic = "abort"
+codegen-units = 1
+lto = true

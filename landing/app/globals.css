@@ -1,0 +1,415 @@
+/* ─── Theme tokens ─────────────────────────────────────────────────────
+   Themes are driven by `data-theme` on <html>, set by the inline boot
+   script in layout.tsx (reads localStorage, falls back to OS preference).
+   The manual toggle button writes to the same attribute, which lets us
+   swap colours AND the phone screenshot without a reload.
+*/
+
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f6f8fb;
+  --surface: #ffffff;
+  --surface-elevated: #f0f3f7;
+  --text: #0e1219;
+  --muted: #4d5b6e;
+  --faint: #6e7a8a;
+  --green: #16a367;
+  --green-light: #16a367;
+  --gold: #b87b0a;
+  --border: #e0e6ef;
+  --shadow: 0 30px 80px rgb(8 11 17 / 0.08);
+  --shadow-tight: 0 8px 24px rgb(8 11 17 / 0.06);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #080b11;
+  --surface: #0e1219;
+  --surface-elevated: #151b24;
+  --text: #f2f4f7;
+  --muted: #94a3b8;
+  --faint: #64748b;
+  --green: #16a367;
+  --green-light: #1ecc7f;
+  --gold: #f5b731;
+  --border: #1e293b;
+  --shadow: 0 32px 90px rgb(0 0 0 / 0.45);
+  --shadow-tight: 0 12px 32px rgb(0 0 0 / 0.4);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 220ms ease, color 220ms ease;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.page {
+  min-height: 100dvh;
+  overflow-x: hidden;
+}
+
+/* ─── Top nav ─────────────────────────────────────────────────────────── */
+
+.nav {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  margin: 0 auto;
+  max-width: 1180px;
+  padding: 24px clamp(16px, 4vw, 32px);
+}
+
+.brand {
+  align-items: center;
+  display: flex;
+  font-size: 18px;
+  font-weight: 700;
+  gap: 12px;
+  letter-spacing: -0.02em;
+}
+
+.brand-mark {
+  border-radius: 10px;
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--green) 18%, transparent);
+  display: block;
+  height: 36px;
+  width: 36px;
+}
+
+.nav-right {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.nav-link {
+  color: var(--muted);
+  font-size: 14px;
+  word-break: break-all;
+}
+
+.nav-link:hover {
+  color: var(--text);
+}
+
+/* ─── Theme toggle button ────────────────────────────────────────────── */
+
+.theme-toggle {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 36px;
+  justify-content: center;
+  padding: 0;
+  transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease,
+    transform 120ms ease;
+  width: 36px;
+}
+
+.theme-toggle:hover {
+  background: var(--surface-elevated);
+  border-color: color-mix(in srgb, var(--green) 45%, var(--border));
+  color: var(--text);
+  transform: translateY(-1px);
+}
+
+.theme-toggle:active {
+  transform: translateY(0);
+}
+
+.theme-toggle-icon {
+  align-items: center;
+  display: inline-flex;
+  justify-content: center;
+}
+
+/* ─── Hero ────────────────────────────────────────────────────────────── */
+
+.hero {
+  align-items: center;
+  display: grid;
+  gap: clamp(32px, 6vw, 72px);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 420px);
+  margin: 0 auto;
+  max-width: 1180px;
+  padding: clamp(32px, 6vw, 72px) clamp(16px, 4vw, 32px) clamp(56px, 8vw, 120px);
+}
+
+.hero-copy {
+  max-width: 640px;
+}
+
+h1 {
+  font-size: clamp(56px, 11vw, 120px);
+  letter-spacing: -0.075em;
+  line-height: 0.92;
+  margin: 0;
+}
+
+.subtitle {
+  color: var(--muted);
+  font-size: clamp(17px, 2vw, 21px);
+  line-height: 1.5;
+  margin: 28px 0 0;
+  max-width: 540px;
+}
+
+.actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 40px;
+}
+
+.secondary-actions {
+  margin-top: 18px;
+}
+
+.button {
+  background: linear-gradient(180deg, var(--green), #0d7a4a);
+  border: 0;
+  border-radius: 18px;
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--green) 35%, transparent);
+  color: #f2f4f7;
+  cursor: pointer;
+  display: inline-flex;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  padding: 16px 22px;
+  transition: transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
+}
+
+.button:hover {
+  box-shadow: 0 10px 26px color-mix(in srgb, var(--green) 45%, transparent);
+  transform: translateY(-1px);
+}
+
+.button:active {
+  transform: translateY(0);
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+  transform: none;
+}
+
+.secondary {
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.secondary:hover {
+  color: var(--text);
+}
+
+.visually-hidden {
+  border: 0;
+  clip: rect(0, 0, 0, 0);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+/* ─── Early access form ──────────────────────────────────────────────── */
+
+.early-access-form {
+  margin-top: 40px;
+  max-width: 540px;
+}
+
+.early-access-row {
+  align-items: stretch;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: var(--shadow-tight);
+  display: flex;
+  gap: 8px;
+  padding: 6px;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.early-access-row:focus-within {
+  border-color: color-mix(in srgb, var(--green) 65%, transparent);
+  box-shadow:
+    var(--shadow-tight),
+    0 0 0 4px color-mix(in srgb, var(--green) 12%, transparent);
+}
+
+.early-access-input {
+  background: transparent;
+  border: 0;
+  color: var(--text);
+  flex: 1;
+  font-family: inherit;
+  font-size: 16px;
+  min-width: 0;
+  outline: none;
+  padding: 12px 14px;
+}
+
+.early-access-input::placeholder {
+  color: var(--faint);
+}
+
+.early-access-input:disabled {
+  opacity: 0.6;
+}
+
+.early-access-submit {
+  border-radius: 14px;
+  flex-shrink: 0;
+  padding: 12px 18px;
+}
+
+.early-access-feedback {
+  color: var(--faint);
+  font-size: 13px;
+  margin-top: 10px;
+  min-height: 18px;
+}
+
+:root[data-theme="light"] .early-access-feedback.is-success {
+  color: var(--green);
+}
+:root[data-theme="dark"] .early-access-feedback.is-success {
+  color: var(--green-light);
+}
+:root[data-theme="light"] .early-access-feedback.is-error {
+  color: #d33232;
+}
+:root[data-theme="dark"] .early-access-feedback.is-error {
+  color: #ff8082;
+}
+
+@media (max-width: 540px) {
+  .early-access-row {
+    flex-direction: column;
+  }
+  .early-access-submit {
+    width: 100%;
+  }
+}
+
+/* ─── Phone screenshot (right column) ────────────────────────────────── */
+
+.phone-wrap {
+  display: flex;
+  justify-content: center;
+  position: relative;
+}
+
+.phone-wrap::before {
+  background: radial-gradient(
+    ellipse at center,
+    color-mix(in srgb, var(--green) 18%, transparent),
+    transparent 70%
+  );
+  border-radius: 50%;
+  content: "";
+  filter: blur(40px);
+  height: 60%;
+  left: 50%;
+  position: absolute;
+  top: 22%;
+  transform: translateX(-50%);
+  width: 70%;
+  z-index: 0;
+}
+
+.phone-screenshot {
+  border-radius: clamp(28px, 4vw, 44px);
+  box-shadow: var(--shadow);
+  display: block;
+  height: auto;
+  max-height: min(80vh, 760px);
+  max-width: 100%;
+  position: relative;
+  width: auto;
+  z-index: 1;
+}
+
+/* Light/dark screenshot swap, driven by the theme attribute. The hidden
+   image is removed from layout entirely so the visible one doesn't fight
+   for vertical space. */
+:root[data-theme="light"] .phone-screenshot--dark {
+  display: none;
+}
+:root[data-theme="dark"] .phone-screenshot--light {
+  display: none;
+}
+
+/* ─── Responsive breakpoints ─────────────────────────────────────────── */
+
+@media (max-width: 960px) {
+  .hero {
+    grid-template-columns: 1fr;
+    padding-bottom: clamp(40px, 12vw, 80px);
+  }
+
+  .hero-copy {
+    max-width: none;
+  }
+
+  .phone-wrap {
+    grid-row: 1;
+    margin-bottom: clamp(8px, 4vw, 40px);
+  }
+
+  .phone-screenshot {
+    max-height: 60vh;
+  }
+}
+
+@media (max-width: 640px) {
+  .nav {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .nav-right {
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: flex-end;
+    max-width: 100%;
+  }
+
+  .nav-link {
+    font-size: 13px;
+    max-width: 100%;
+    text-align: right;
+  }
+}

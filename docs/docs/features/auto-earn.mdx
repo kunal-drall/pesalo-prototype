@@ -1,0 +1,37 @@
+---
+title: Auto-Earn
+sidebar_position: 2
+---
+
+# Auto-Earn
+
+Every dollar that lands in your wallet starts earning interest at a variable APY the moment it arrives. There's no opt-in screen — you receive a payment, and the balance is already on yield.
+
+## How it appears
+
+On Home, the green pill under the balance reads **"Earning X% APY"** where `X` is the weighted-average rate across all your assets:
+
+```
+weighted APY = sum( (usdValue_i / totalUsd) * autoEarnApy_i ) for each asset i
+```
+
+Below that, **"+$Y today"** is the daily slice of that APY against the current total:
+
+```
+today's earnings = totalUsd * weightedApy / 100 / 365
+```
+
+Per-asset rows on Home show each token's own auto-earn APY and its share of today's earnings.
+
+## What's actually happening under the hood
+
+Auto-earn routes deposited assets into a Soroban contract that holds yield-bearing tokens. The math model is documented in the [Developer / Contracts](/developer/contracts/auto-earn) section. From the user's perspective:
+
+- **No actions required.** Deposit / receive → instantly earning.
+- **Rates float.** They follow the underlying market, so the figure on Home changes over time.
+- **No lockup.** You can send or swap the balance at any moment; it stops earning the instant funds move out.
+- **No minimums.** Even fractional balances earn.
+
+## Limitations on the dev keypair fallback
+
+If you signed up on a simulator or device without WebAuthn / Face ID, Pesalo created a plain Stellar G-address rather than the passkey-bound smart wallet. **Auto-Earn deposits route through the passkey smart wallet's Router contract, so dev keypair accounts don't actually accrue yield yet** — the APY pill still shows the live market rate, but your underlying balance won't grow until passkey-wallet enrolment ships. See [Limitations](/features/limitations).

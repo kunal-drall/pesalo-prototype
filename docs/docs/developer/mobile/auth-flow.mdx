@@ -1,0 +1,113 @@
+---
+title: Auth flow
+sidebar_position: 2
+---
+
+# Auth flow
+
+Auth lives in `mobile/lib/passkey/index.ts` + `mobile/stores/authStore.ts` + the root layout at `mobile/app/_layout.tsx`. There are three states the app can be in.
+
+## The state machine
+
+```text
+              ┌──────────────────┐
+              │   boot           │
+              │  (checkAuth)     │
+              └────────┬─────────┘
+                       │
+        ┌──────────────┴──────────────┐
+        ▼                             ▼
+ ┌────────────┐                ┌─────────────┐
+ │ wallet     │                │ no wallet   │
+ │ exists     │                │             │
+ └─────┬──────┘                └──────┬──────┘
+       │                              │
+       │  router.replace              │  router.replace
+       ▼                              ▼
+   /(tabs)                        /(auth)/welcome
+                                       │
+                                       │  Create Account
+                                       ▼
+                              ┌────────────────┐
+                              │  passkey?      │
+                              └──┬──────────┬──┘
+                          yes    │          │ no (Simulator, dev hw)
+                                 ▼          ▼
+                          PasskeyKit.    Keypair.random()
+                          createWallet   + Friendbot fund
+                                 │          │
+                                 └────┬─────┘
+                                      ▼
+                              SecureStore writes
+                                      │
+                                      ▼
+                                  /(tabs)
+```
+
+## The gate (`app/_layout.tsx`)
+
+```ts
+useEffect(() => {
+  if (!bootChecked) return;
+  const inAuth = segments[0] === "(auth)";
+  if (!walletAddress && !inAuth) {
+    router.replace("/(auth)/welcome");
+  } else if (walletAddress && inAuth) {
+    router.replace("/(tabs)");
+  }
+}, [bootChecked, walletAddress, segments, router]);
+
+if (!bootChecked) {
+  return <View style={{ flex: 1, backgroundColor: colors.bg.primary }} />;
+}
+```
+
+The empty container while `!bootChecked` matters — without it, the auth-gated UI flickers for one frame on cold start.
+
+## Wallet creation (`lib/passkey/index.ts`)
+
+```ts
+export async function createAccount(): Promise<{ address: string; isPasskey: boolean; funded: boolean }> {
+  if (CONTRACTS.passkeyWalletWasmHash) {
+    try {
+      const kit = getKit();
+      const wallet = await kit.createWallet("Pesalo", "Pesalo Saver", {
+        rpId: PESALO_DOMAIN,
+        authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
+      });
+      await setSecureItem(CREDENTIAL_ID_KEY, wallet.keyIdBase64);
+      await setSecureItem(WALLET_ADDRESS_KEY, wallet.contractId);
+      return { address: wallet.contractId, isPasskey: true, funded: false };
+    } catch (err) {
+      console.warn("[pesalo] passkey wallet creation failed, falling back to dev keypair:", err);
+    }
+  }
+
+  // Dev path
+  const kp = await createDevKeypair();
+  const address = kp.publicKey();
+  const result = await fundWithFriendbot(address);
+  return { address, isPasskey: false, funded: result.ok };
+}
+```
+
+The error is **silently swallowed** because the most common failure on real devices is "WebAuthn doesn't have an associated domain configured" — surfacing that to dev users isn't useful, and the fallback is functional.
+
+For production builds, the `try/catch` should be tightened to only fall through on a closed allow-list of error types, and Sentry should log every passkey failure.
+
+## Sign flow
+
+```ts
+export async function signTransaction(unsignedXdr: string): Promise<string> {
+  if (await isPasskeyWallet()) {
+    // Soroban / passkey path: kit.sign(...)
+  }
+  // Classic path: Keypair sign + Horizon submit
+}
+```
+
+For classic Stellar transactions we **don't go through this function at all** — `lib/stellar/payments.ts` keeps the `Transaction` object in-module and signs/submits there. See [Classic Stellar](/developer/mobile/classic-stellar) for why.
+
+## Sign-out
+
+`signOut` deletes both the passkey credential ID and the dev keypair secret from `expo-secure-store`, clears the Zustand stores, and `router.replace("/(auth)/welcome")`. There's no recovery — Pesalo doesn't store the key anywhere off-device.

@@ -1,0 +1,86 @@
+---
+title: Architecture
+slug: /architecture
+sidebar_position: 1
+---
+
+# Architecture
+
+Pesalo has four moving parts. They were designed so each can be developed and deployed independently.
+
+```text
+┌──────────────────────────┐       ┌──────────────────────────┐
+│ Mobile (Expo / RN)       │       │ Landing (Next.js, Vercel)│
+│ - passkey-bound wallet   │       │ - pesalo.fun             │
+│ - classic Stellar (G-…)  │       │ - Early-access form      │
+│ - Swap / Send / Boost UI │       │ - Theme toggle           │
+└────────────┬─────────────┘       └────────────┬─────────────┘
+             │                                  │
+             │ Horizon REST + Soroban RPC       │  Postgres (Railway)
+             ▼                                  ▼
+┌──────────────────────────┐       ┌──────────────────────────┐
+│ Stellar testnet          │       │ Backend (Express on RW)  │
+│ - Horizon                │       │ - /v1/rates              │
+│ - Soroban RPC            │◀──────│ - /v1/prices             │
+│ - Router + SY adapter +  │       │ - /v1/positions/:addr    │
+│   Splitter + Yield-Mkt   │       │ - /v1/markets            │
+│   contracts (Soroban)    │       │ - /v1/early-access       │
+└──────────────────────────┘       └──────────────────────────┘
+                                                ▲
+                                                │
+                                   OZ Channels relayer
+                                   (sponsors Soroban tx fees)
+```
+
+## Repos / directories
+
+- [`mobile/`](https://github.com/kunal-drall/pesalo-prototype/tree/master/mobile) — Expo + React Native + Zustand. The user-facing app.
+- [`landing/`](https://github.com/kunal-drall/pesalo-prototype/tree/master/landing) — Next.js marketing site (`pesalo.fun`).
+- [`backend/`](https://github.com/kunal-drall/pesalo-prototype/tree/master/backend) — Express server. Indexes rates/prices/positions/activity for the mobile UI.
+- [`contracts/`](https://github.com/kunal-drall/pesalo-prototype/tree/master/contracts) — Soroban contracts in Rust (Router, SY adapter, Splitter, Yield-Market with logit-curve AMM, Yield-Math).
+- [`docs/`](https://github.com/kunal-drall/pesalo-prototype/tree/master/docs) — this Docusaurus site.
+
+## Identity model
+
+Two identity paths coexist:
+
+### Passkey smart wallet (production path)
+
+`passkey-kit` deploys a Soroban smart wallet bound to a Secp256r1 WebAuthn signer. The contract's address (a Stellar `C…` contract id) is the user's identity. The signer is a WebAuthn credential stored in the device's secure enclave; the device never holds an Ed25519 secret.
+
+### Dev keypair (Simulator / unprovisioned devices)
+
+When WebAuthn isn't available, Pesalo generates a Stellar Ed25519 keypair via `Keypair.random()` and stores the secret in `expo-secure-store`. The keypair's `G…` address acts as the user's identity. This path skips the Router contract — Boost / Auto-Earn don't accrue yield on these accounts.
+
+See [Mobile / Auth flow](/developer/mobile/auth-flow) for the full state machine.
+
+## Transaction submission paths
+
+| Flow | Builder | Signer | Submitter |
+|------|---------|--------|-----------|
+| Send | `Operation.payment` | dev keypair OR passkey | **fetch** → Horizon `/transactions` |
+| Swap | `Operation.pathPaymentStrictSend` | dev keypair OR passkey | **fetch** → Horizon `/transactions` |
+| Trustline | `Operation.changeTrust` | dev keypair OR passkey | **fetch** → Horizon `/transactions` |
+| Boost | Soroban Router contract | passkey only | OZ Channels relayer (sponsored fees) |
+| Auto-deposit | Soroban Router contract | passkey only | OZ Channels relayer |
+
+Classic Stellar ops go through Horizon directly. Soroban contract calls go through OZ Channels because the relayer pays the network fees out of a sponsor account — users never need a pre-funded smart-wallet balance to call the Router.
+
+## Live testnet contract addresses
+
+Loaded into `mobile/.env.local` and pushed to EAS env vars:
+
+```env
+EXPO_PUBLIC_ROUTER_CONTRACT_ID=CCUG7VF4LPNVFO4JJ2SGAKNLBQLRMZHXRY3YX4YHGNHRUKCKFNQQINL7
+EXPO_PUBLIC_USDC_MARKET_CONTRACT_ID=CBTVKJUEU42FVIWGVW5HCTQKLGFVAPZE72BGBOWLP2RNFJE6YO5PLSEL
+EXPO_PUBLIC_EURC_MARKET_CONTRACT_ID=CBD67GLBWKQBBZMKC7BOK4Z53AAZWBSCQYC2H467RS4DDEGULMZV362Y
+EXPO_PUBLIC_USDC_SY_CONTRACT_ID=CAACQ5OGFP7ZPS6U3XDO6T67SQMSXNRO4FABWFV3EMWEUUM6DU3XFREK
+EXPO_PUBLIC_EURC_SY_CONTRACT_ID=CBGE2IFCBCWPH4OJR4EZTVTMKV5ATL3WH4QGDYEIXP2LRGZBDP6UI7GB
+EXPO_PUBLIC_XLM_SY_CONTRACT_ID=CDXECW7NPIVDVOEV2D5EKTXPABBC4EJPACZ6LRLQSCC3F5KEHRABPO5C
+EXPO_PUBLIC_USDC_SPLITTER_CONTRACT_ID=CC54AH2NOPVUTE3QZ3GRHVIRXTMZNFHDLMCKZ4ZIOFD26V2QP3Q6BREV
+EXPO_PUBLIC_EURC_SPLITTER_CONTRACT_ID=CAIPTYVRCB2HCG7QJ675FXN5E6ZL452AKQ3HJLVGGEBFA4JOECDSEPXC
+EXPO_PUBLIC_USDC_ASSET_CONTRACT_ID=CC6K5SDGTDYPZDDHM6GV4OV3DAQPHKIMROIVE2LGLQN7PF4HEYSJWYYJ
+EXPO_PUBLIC_EURC_ASSET_CONTRACT_ID=CCFU2STUWKUTHDNG2IS57BS2WAPGO75KG55H4JLPILSKISU5DHX26F4H
+```
+
+Mainnet contract IDs will differ on every contract.

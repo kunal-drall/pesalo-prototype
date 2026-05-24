@@ -1,0 +1,70 @@
+---
+title: Setup
+sidebar_position: 1
+---
+
+# Mobile setup
+
+The mobile app lives at [`mobile/`](https://github.com/kunal-drall/pesalo-prototype/tree/master/mobile). It's an Expo SDK 53 app with custom native modules (passkey-kit, react-native-svg, react-native-webview), so it ships as a custom dev client — Expo Go won't load it.
+
+## Prerequisites
+
+- **Node** 22 or later (the Stellar SDK uses native fetch; older Node has issues).
+- **npm** 9+.
+- **Xcode 15+** with the Command Line Tools selected at `/Applications/Xcode.app/Contents/Developer` (run `sudo xcode-select -s ...` if not).
+- **EAS CLI**: `npm install --global eas-cli`.
+- **An Expo account** linked to the project. The project id is in `mobile/app.json`:
+  ```json
+  { "extra": { "eas": { "projectId": "03f27233-d502-418c-8ea4-0a5e054e63e7" } } }
+  ```
+
+## Install + dev server
+
+```bash
+cd mobile
+npm install
+npx expo start --dev-client
+```
+
+Metro listens on `:8081`. The currently-installed dev shell connects via QR or via the Expo Orbit app.
+
+## First-time dev build
+
+You can't run Pesalo in Expo Go — it ships native modules. The first build has to come from EAS:
+
+```bash
+# Push env vars (only need to do this once, then on changes)
+eas env:push development --path .env.local --force
+
+# Trigger a build for the iOS Simulator + Android
+eas build --platform all --profile development --no-wait
+
+# When the build finishes (10-15 min):
+eas build:run --platform ios --latest    # iOS Sim
+# or
+eas build:run --platform android --latest # Android emulator / device
+```
+
+## .env.local
+
+`mobile/.env.local` is gitignored. It pins the testnet contract IDs, Soroban RPC, Horizon URL, OZ Channels relayer key, and the passkey wasm hash. See [Architecture](/developer/architecture) for the full set.
+
+EAS doesn't read `.env.local` automatically — it reads its own environment variables (per profile). To sync your local file up:
+
+```bash
+# Strip empty lines first, since EAS rejects empty values.
+grep -vE '^#|^$|=$' .env.local > /tmp/env-push
+eas env:push development --path /tmp/env-push --force
+```
+
+## Running on iOS Simulator
+
+The Simulator can't do WebAuthn reliably, so wallet creation falls back to a dev keypair. Send / Receive / Swap / Activity all work end-to-end against testnet. Boost / Auto-Earn don't accrue because the Router needs passkey auth.
+
+If `xcrun simctl` errors with `error: unable to find utility "simctl"`, your `xcode-select` is pointing at Command Line Tools only. Fix it:
+
+```bash
+sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+```
+
+Then `eas build:run -p ios --latest` will work.

@@ -1,0 +1,60 @@
+---
+title: Deployment
+sidebar_position: 2
+---
+
+# Backend deployment
+
+The backend was originally hosted on Railway at `pesalo-api-production.up.railway.app`. The DNS for that hostname stopped resolving recently — see [Limitations](/features/limitations) for the user-visible consequences.
+
+## Stack
+
+- **Express** (Node 22) — `backend/src/index.ts`.
+- **Postgres** — Railway managed. Holds:
+  - `early_access` (email submissions from the landing form).
+  - `rates_cache` (Yield-Market state snapshots, refreshed every 30s).
+  - `positions_cache` (per-address Soroban contract reads, refreshed lazily on hit).
+- **Stellar SDK** — talks to Horizon + Soroban RPC. The full `@stellar/stellar-sdk` (no polyfill drama because it's Node-native).
+- **Custom domain** target was `api.pesalo.fun` (CNAME → Railway). Currently unconfigured.
+
+## Required env vars
+
+```env
+PORT=3001
+DATABASE_URL=postgresql://...     # Railway-provided
+SOROBAN_RPC_URL=https://soroban-testnet.stellar.org
+HORIZON_URL=https://horizon-testnet.stellar.org
+NETWORK_PASSPHRASE=Test SDF Network ; September 2015
+
+# Contract addresses (same set as mobile/.env.local)
+ROUTER_CONTRACT_ID=CCUG7VF4LPNVFO4JJ2SGAKNLBQLRMZHXRY3YX4YHGNHRUKCKFNQQINL7
+USDC_MARKET_CONTRACT_ID=CBTVKJUEU42FVIWGVW5HCTQKLGFVAPZE72BGBOWLP2RNFJE6YO5PLSEL
+# ... etc.
+```
+
+## Build + deploy
+
+```bash
+cd backend
+npm install
+npm run build       # tsc → dist/
+npm run start       # node dist/index.js
+```
+
+Railway runs the same `npm run build` then `npm run start` automatically.
+
+## Bringing it back online
+
+The simplest path to get rates/prices/positions working again is:
+
+1. **Re-deploy on Railway** (the existing project may just be paused). Restore env vars from the previous deploy.
+2. **Or migrate to another host** (Fly.io, Render, Vercel functions). The stack is plain Express; any Node hosting works.
+3. **Or remove the backend entirely** and read everything from Horizon / a public price oracle (CoinGecko's `simple/price` endpoint for USD prices, on-chain reads for rates).
+
+Option 3 is more invasive but eliminates a moving part. The mobile app already does it for Activity — see [`mobile/lib/stellar/horizonActivity.ts`](https://github.com/kunal-drall/pesalo-prototype/blob/master/mobile/lib/stellar/horizonActivity.ts). Doing the same for rates + prices requires:
+
+- A small `getMarketState(market_id)` Soroban read for each open market → derive boost APY.
+- A small `getExchangeRate(sy_id)` Soroban read + a delta against the previous snapshot → derive auto-earn APY.
+- A CoinGecko fetch for `XLM_USD` (USDC/EURC are pegged ≈ 1).
+
+For positions, the read is per-PT-contract `balance(owner)` for each market — same as the indexer does today, just client-side.

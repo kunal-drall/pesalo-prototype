@@ -1,0 +1,48 @@
+---
+title: Overview
+sidebar_position: 1
+---
+
+# Contracts overview
+
+Pesalo's on-chain layer is a Soroban yield protocol modelled after Pendle (PT/YT yield tokenization + a logit-curve AMM). Five contracts ship today.
+
+```text
+                      ┌──────────────┐
+                      │   Router     │   user → smart wallet → router.boost(...)
+                      │  (entry pt)  │
+                      └──────┬───────┘
+                             │
+            ┌────────────────┼────────────────┐
+            │                │                │
+       ┌────▼────┐     ┌─────▼─────┐     ┌────▼─────┐
+       │   SY    │     │  Splitter │     │  Yield-  │
+       │ adapter │     │ (PT + YT) │────▶│  Market  │
+       │ (Blend) │     │           │     │  (AMM)   │
+       └─────────┘     └───────────┘     └──────────┘
+```
+
+| Contract | What it does |
+|----------|--------------|
+| **Router** | The single entry point users call (`auto_deposit`, `auto_withdraw`, `boost`, `unboost`, `redeem_boost`). Pre-authorizes sub-invocations so smart wallets only sign once. |
+| **SY adapter** | Wraps the underlying asset into a yield-bearing SY (Standardized Yield) token. Today it sits on top of Blend on Stellar. One SY per asset (USDC / EURC / XLM). |
+| **Splitter** | Splits 1 SY into 1 PT (Principal Token) + 1 YT (Yield Token). PT pays out at maturity; YT pays the streaming yield until then. |
+| **Yield-Market** | The AMM that prices PT against SY. Uses a [logit-curve](/developer/contracts/yield-math) so price ↔ implied APY conversions are clean and the curve concentrates liquidity near 1:1. |
+| **Yield-Math** | A pure library of fixed-point helpers (WAD math, log, exp). No state. |
+
+## Repos
+
+Live in `contracts/` at the repo root. Build with `stellar contract build` (uses the `wasm32v1-none` target — Soroban doesn't support the reference-types extension that `wasm32-unknown-unknown` emits). Every contract has tests in its `tests/` folder; the yield-market has snapshot fixtures for the curve.
+
+## Routing through OZ Channels
+
+Pesalo's smart wallet doesn't pay fees directly. Every Soroban tx the mobile app signs is uploaded to OpenZeppelin Channels' testnet relayer, which sponsors the transaction fee + submits to Soroban RPC. This means a brand-new wallet can call `auto_deposit` immediately without first being funded with XLM for fees.
+
+```text
+Mobile signs tx → POST {/v1/transactions, channels-api-key}
+                       to channels.openzeppelin.com/testnet
+                       → Channels relayer signs as fee account → Soroban RPC submit
+                       → returns final tx hash
+```
+
+See [Mobile / Soroban relayer](/developer/mobile/soroban-relayer) for the client side.

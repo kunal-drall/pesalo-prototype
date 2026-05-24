@@ -1,0 +1,65 @@
+---
+title: Handoff
+sidebar_position: 10
+---
+
+# Handoff
+
+This page is the punch list a fresh contributor (human or agent) should read before starting work. The mobile repo also has `mobile/HANDOFF.md` checked in; this doc is the canonical web-readable version.
+
+## Priority 1 — finish the mobile MVP
+
+1. **Real passkey wallet creation on device.** Today's Simulator fallback creates a plain `G…` Stellar account, which can't call our Router contract. To get the production path working:
+   - Apple Developer Program enrolment for the team.
+   - Host `apple-app-site-association` on `pesalo.fun/.well-known/`.
+   - Host the Android `assetlinks.json` equivalent.
+   - Real-device testing via `eas build -p ios --profile development` then install via Orbit.
+   - Once passkey lands, drop the dev-keypair fallback for production builds.
+
+2. **Boost / Unboost on dev keypair.** Either:
+   - Build a "Stellar Account Boost" Router variant that accepts plain Ed25519 auth, or
+   - Decide that boost is passkey-only and explicitly disable the CTA for dev accounts (currently it lights up but the call will fail).
+
+3. **Bring the indexer back online.** The Railway-hosted backend is offline. Options laid out in [Backend / Deployment](/developer/backend/deployment). Until it's back, the mobile app's Rates / Prices / Positions endpoints return empty.
+
+4. **Real USD prices.** The `/v1/prices` endpoint depends on whatever oracle the backend wires up. Confirm it pulls from a real source (CoinGecko, Reflector). The mobile UI silently zeros balances when prices are missing.
+
+5. **Activity surfacing for Boost / Auto-Earn events.** Currently `lib/stellar/horizonActivity.ts` only parses `payment`, `create_account`, `path_payment_*`. Soroban contract events (which are how boost/redeem land on chain) flow through `invoke_host_function` records that the current parser ignores. Add a case for them.
+
+6. **Maturity flow polish.** `app/savings/maturity/[id].tsx` exists but needs to be wired to the Router's `redeem_boost` method. The "Unboost early" CTA from the position detail screen needs to call `unboost`.
+
+7. **Error UX polish.** Raw error strings currently render in red inline text. Replace with a friendly toast / snackbar + retry button. Specific common errors (insufficient funds, no trustline, expired session) deserve dedicated copy.
+
+## Priority 2 — production hardening
+
+8. **Move `EXPO_PUBLIC_CHANNELS_API_KEY` off the client.** It currently ships in every dev build. For production, proxy through the backend so the key never lands on user devices.
+
+9. **Sentry / observability.** `lib/observability/sentry.ts` already initialises Sentry; the DSN is empty (`EXPO_PUBLIC_SENTRY_DSN=`). Provision a project + wire it.
+
+10. **OTA updates.** `eas.json` references channels but `expo-updates` isn't installed. Run `npx expo install expo-updates && eas update:configure` so JS-only patches don't need a full rebuild.
+
+11. **Mainnet readiness.** Switch:
+    - OZ Channels endpoint → mainnet.
+    - `Networks.TESTNET` → `Networks.PUBLIC`.
+    - Horizon + Soroban RPC URLs → mainnet.
+    - Re-deploy all five contracts on mainnet, repoint env vars.
+
+## Assets to source
+
+- **App icon** (1024×1024 PNG at `mobile/assets/icon.png`).
+- **Adaptive icon foreground** (1024×1024 PNG at `mobile/assets/adaptive-icon.png`).
+- **Splash screen** (1284×2778 on dark `#080B11`).
+- **Brand Sprout PNG export** (for share cards + store listings).
+- **High-fidelity token icons** if we want to swap the in-app SVGs for Circle / Stellar's official PNGs.
+- **Empty-state illustrations** for Discover and Activity (optional).
+
+## Things to remember about this codebase
+
+See [Mobile / Quirks](/developer/mobile/quirks) for the full list. The big ones:
+
+- **`buffer` polyfill returns plain `Uint8Array`s**, so `Transaction.toXDR()` doesn't return a base64 string in RN. Use the explicit `bytesToBase64()` helper.
+- **Five copies of `@stellar/stellar-base` in node_modules.** Don't round-trip Transactions through XDR strings across module boundaries.
+- **`@openzeppelin/relayer-plugin-channels` is shimmed** to only expose its client subpath. The plugin half crashes at module-load on RN.
+- **Stellar SDK v14 has a packaging bug** that Metro intercepts.
+- **Polyfill ordering matters.** `index.js` is the entry, not `expo-router/entry`.
+- **exFAT AppleDouble sidecars** are blocked at Metro + tsconfig level.

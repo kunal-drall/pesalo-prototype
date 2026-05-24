@@ -1,0 +1,49 @@
+---
+title: Overview
+slug: /overview
+sidebar_position: 1
+---
+
+# Pesalo Features
+
+Pesalo is a passkey-first savings wallet on Stellar. You hold **USDC, EURC, and XLM**, every dollar starts earning the moment it arrives, and you can lock in higher rates when you want certainty.
+
+This section walks the user-facing surfaces. The [Developer](/developer/architecture) section covers how each one is built.
+
+<div className="pesalo-grid">
+
+<a className="pesalo-card" href="/features/auto-earn">
+  <h3>Auto-Earn</h3>
+  <p>Your idle balance earns a variable APY automatically — no opt-in flow, no manual deposits.</p>
+</a>
+
+<a className="pesalo-card" href="/features/boost">
+  <h3>Boost</h3>
+  <p>Lock a piece of your balance for a fixed term to guarantee a higher rate than auto-earn.</p>
+</a>
+
+<a className="pesalo-card" href="/features/send-receive">
+  <h3>Send &amp; Receive</h3>
+  <p>Stellar G-address payments confirm in ~5 seconds. Friendbot fills your testnet wallet on tap.</p>
+</a>
+
+<a className="pesalo-card" href="/features/swap">
+  <h3>Swap</h3>
+  <p>Convert between XLM, USDC, and EURC via the Stellar DEX. Trustlines added automatically.</p>
+</a>
+
+<a className="pesalo-card" href="/features/discover">
+  <h3>Discover</h3>
+  <p>Curated, real Stellar dApps with their actual favicons. Open in an in-app browser.</p>
+</a>
+
+<a className="pesalo-card" href="/features/activity">
+  <h3>Activity</h3>
+  <p>Live transaction history grouped by time, with USDC / EURC / XLM filters.</p>
+</a>
+
+</div>
+
+## What's on testnet
+
+Pesalo runs on **Stellar testnet** today. Wallet creation uses Face ID / a passkey where available; on simulators or unprovisioned devices we fall back to a random Stellar keypair stored in the device secure enclave so the rest of the app works end-to-end. See [Limitations](/features/limitations) for the testnet-specific quirks.

@@ -1,0 +1,93 @@
+---
+title: API surface
+sidebar_position: 1
+---
+
+# Backend API
+
+The backend lives in [`backend/`](https://github.com/kunal-drall/pesalo-prototype/tree/master/backend). It's a small Express server that the mobile app pulls indexed data from.
+
+## Endpoints
+
+| Method | Path | Used by |
+|--------|------|---------|
+| `GET` | `/v1/rates` | Boost tab + Home (Auto-Earn APYs) |
+| `GET` | `/v1/prices` | Home (USD totals for XLM / USDC / EURC) |
+| `GET` | `/v1/positions/:address` | Home (Boosted positions list) |
+| `GET` | `/v1/activity/:address` | Activity tab *(now Horizon-direct in mobile)* |
+| `GET` | `/v1/markets` | Internal — full Yield-Market state snapshot |
+| `POST` | `/v1/early-access` | Landing page email form |
+
+## Response shapes
+
+### `GET /v1/rates`
+
+```json
+{
+  "rates": [
+    {
+      "asset": "USDC",
+      "apy": 12.5,
+      "days": 90,
+      "maturity": "2026-09-15T00:00:00.000Z",
+      "market": "CBTVKJUEU42FVIWGVW5HCTQKLGFVAPZE72BGBOWLP2RNFJE6YO5PLSEL"
+    }
+  ],
+  "flexRates": [
+    { "asset": "USDC", "apy": 10.2 },
+    { "asset": "EURC", "apy": 8.1 },
+    { "asset": "XLM",  "apy": 4.2  }
+  ],
+  "updatedAt": "2026-05-20T10:30:00.000Z"
+}
+```
+
+The boost APY comes from the Yield-Market AMM's mid-price → implied yield calculation (see [Yield Math](/developer/contracts/yield-math)). The flex APY comes from the SY adapter's recent `exchange_rate()` deltas.
+
+### `GET /v1/prices`
+
+```json
+{
+  "USDC_USD": 1.00,
+  "EURC_USD": 1.08,
+  "XLM_USD": 0.10,
+  "updatedAt": "2026-05-20T10:30:00.000Z"
+}
+```
+
+The mobile UI uses these to compute the `totalUsd` figure on Home. If the response is missing or any field is undefined, balances default to `0` USD value (defensive coercion in `walletStore`).
+
+### `GET /v1/positions/:address`
+
+```json
+{
+  "fixed": [
+    {
+      "id": "pos_abc",
+      "type": "fixed",
+      "asset": "USDC",
+      "amount": 300.0,
+      "apy": 12.5,
+      "earned": 4.38,
+      "maturity": "2026-09-15T00:00:00.000Z",
+      "daysRemaining": 52,
+      "market": "CBTVKJUEU42FVIWGVW5HCTQKLGFVAPZE72BGBOWLP2RNFJE6YO5PLSEL",
+      "syContract": "CAACQ5OGFP7ZPS6U3XDO6T67SQMSXNRO4FABWFV3EMWEUUM6DU3XFREK",
+      "splitterContract": "CC54AH2NOPVUTE3QZ3GRHVIRXTMZNFHDLMCKZ4ZIOFD26V2QP3Q6BREV"
+    }
+  ],
+  "flex": []
+}
+```
+
+Positions are derived from reading the PT balance on each market's PT contract for the given address. The `earned` field is the difference between current expected payout (via market mid-price) and original principal.
+
+### `POST /v1/early-access`
+
+Stores `{ email, source }` into a Postgres table on Railway. Used by the landing form at `pesalo.fun`.
+
+## Failure modes
+
+- **Backend offline** → Activity falls through to direct Horizon (already wired). Rates / prices / positions return empty, the mobile UI degrades gracefully (APY pills show 0%, USD totals stay at $0, Boost tab empty state).
+- **Soroban RPC slow** → indexer queues retry, returns stale data with a `staleAt` field (mobile shows a "Showing cached data" toast).
+- **Price oracle dry** → `prices` keys missing, mobile defaults to 0 USD value for that asset.

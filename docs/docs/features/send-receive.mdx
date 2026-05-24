@@ -1,0 +1,36 @@
+---
+title: Send & Receive
+sidebar_position: 4
+---
+
+# Send &amp; Receive
+
+Pesalo sends and receives XLM, USDC, and EURC over the classic Stellar network. Settlement is typically **3 – 5 seconds**, and the on-chain fee is **0.00001 XLM** per operation.
+
+## Receive
+
+Open **Receive** from the Home pill row. You'll see:
+
+- A QR code encoding your Stellar address (`G...` for a dev keypair, `C...` for a passkey smart wallet).
+- The full address as plain text — selectable and copyable.
+- A **Get testnet XLM (Friendbot)** button that re-runs Stellar's testnet faucet against your address. Use it whenever you need more testnet XLM.
+
+Anyone with your address can send you XLM directly. For USDC or EURC, the sender needs to know your address **and** your account needs a trustline for that asset (we add it automatically on first swap).
+
+## Send
+
+Open **Send** from the Home pill row. Pick the asset, type the amount, paste a recipient address.
+
+- Address validation is `^[GC][A-Z2-7]{55}$` (Stellar G- or C-addresses; nothing else).
+- **MAX** chip prefills your full available balance.
+- The hint chip reads *"Settles in ~5 seconds on Stellar testnet"* — that's the real Stellar finality window.
+
+On submit, Pesalo builds an `Operation.payment`, signs it with the on-device key, and POSTs the base64 envelope straight to Horizon. There's no relayer in the middle — the send fails immediately if the recipient doesn't exist on testnet or your balance is short.
+
+## What if the send fails?
+
+The red error line shows Stellar's actual rejection code translated into plain English. Common ones:
+
+- *"The destination account doesn't exist on testnet yet."* — recipient hasn't been Friendbot-funded.
+- *"The destination is at its trustline limit."* — they trust the asset but their cap is full.
+- *"Not enough XLM to satisfy the base reserve."* — your account is below the 2 XLM reserve floor. Top up with Friendbot.

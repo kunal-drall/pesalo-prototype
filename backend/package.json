@@ -1,0 +1,35 @@
+{
+  "name": "pesalo-backend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "nodemon --watch src --ext ts --exec ts-node src/index.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/index.js",
+    "test": "jest --runInBand",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@sentry/node": "^10.53.1",
+    "@stellar/stellar-sdk": "latest",
+    "cors": "latest",
+    "dotenv": "latest",
+    "express": "latest",
+    "pg": "latest",
+    "redis": "latest"
+  },
+  "devDependencies": {
+    "@types/cors": "latest",
+    "@types/express": "latest",
+    "@types/jest": "latest",
+    "@types/node": "latest",
+    "@types/pg": "latest",
+    "@types/supertest": "latest",
+    "jest": "latest",
+    "nodemon": "latest",
+    "supertest": "latest",
+    "ts-jest": "latest",
+    "ts-node": "latest",
+    "typescript": "latest"
+  }
+}
