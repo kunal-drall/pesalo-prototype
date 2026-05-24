@@ -31,6 +31,13 @@ export const CONTRACTS = {
   eurcAsset: process.env.EXPO_PUBLIC_EURC_ASSET_CONTRACT_ID ?? "",
   passkeyFactory: process.env.EXPO_PUBLIC_PASSKEY_FACTORY_ID ?? "",
   passkeyWalletWasmHash: process.env.EXPO_PUBLIC_PASSKEY_WALLET_HASH ?? "",
+  /// Reflector "External CEX & DEX" oracle on Stellar testnet. Aggregates
+  /// off-chain CEX prices and exposes them on-chain via Soroban. We read
+  /// `lastprice(Asset::Other(SYMBOL))` to get XLM/USDC/EURC USD quotes
+  /// without a centralized backend. See docs.reflector.network.
+  reflectorOracle:
+    process.env.EXPO_PUBLIC_REFLECTOR_CONTRACT_ID ??
+    "CCYOZJCOPG34LLQQ7N24YXBM7LL62R7ONMZ3G6WZAAYPB5OYKOMJRN63",
 } as const;
 
 export const ASSET_DECIMALS: Record<SupportedAsset, number> = {

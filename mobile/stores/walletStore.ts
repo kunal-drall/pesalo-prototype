@@ -1,9 +1,10 @@
 import { create } from "zustand";
 
 import { fetchPositions } from "@/lib/api/positions";
-import { fetchPrices, PricesResponse } from "@/lib/api/prices";
+import { PricesResponse } from "@/lib/api/prices";
 import { fetchRates, RatesResponse } from "@/lib/api/rates";
 import { stellarClient } from "@/lib/stellar/client";
+import { fetchReflectorPrices } from "@/lib/stellar/reflector";
 import { AssetBalance, SavingsPosition } from "@/lib/stellar/types";
 import { getCache, setCache } from "@/lib/storage/cache";
 import { SUPPORTED_ASSETS, SupportedAsset } from "@/lib/utils/constants";
@@ -82,13 +83,15 @@ export const useWalletStore = create<WalletState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      // Pull from chain + backend in parallel. The backend is a read-through
-      // cache: if it's down, we still recover via the on-chain queries.
+      // Pull balances from Horizon, prices straight from the Reflector
+      // oracle on Soroban (no backend in the path), and rates/positions
+      // from the indexer. Everything runs in parallel; failures are
+      // isolated via allSettled so one slow endpoint can't stall the UI.
       const [horizonBalances, ratesResult, pricesResult, positionsResult] =
         await Promise.allSettled([
           stellarClient.getBalances(address),
           fetchRates(),
-          fetchPrices(),
+          fetchReflectorPrices(),
           fetchPositions(address),
         ]);
 
