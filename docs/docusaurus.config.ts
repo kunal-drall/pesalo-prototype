@@ -16,8 +16,8 @@ const config: Config = {
     v4: true,
   },
 
-  url: "https://pesalo.fun",
-  baseUrl: "/docs/",
+  url: "https://docs.pesalo.fun",
+  baseUrl: "/",
   trailingSlash: false,
 
   organizationName: "kunal-drall",
